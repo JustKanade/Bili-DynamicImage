@@ -1,0 +1,829 @@
+// Content script for extracting dynamic information from Bilibili pages
+class BilibiliContentScript {
+    constructor() {
+        this.downloadedIds = new Set();
+        this.downloadButton = null;
+        this.isDownloading = false;
+        this.currentUrl = window.location.href;
+        this.observer = null;
+        this.init();
+    }
+
+    async init() {
+        try {
+
+            if (!chrome.runtime || !chrome.runtime.id) {
+                console.error('Extension context invalidated in init');
+
+                setTimeout(() => this.init(), 5000);
+                return;
+            }
+
+            chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                this.handleMessage(message, sendResponse);
+                return true;
+            });
+
+            await this.loadDownloadedIds();
+            
+            // Initial button setup
+            this.setupDownloadButton();
+            
+            // Monitor page changes
+            this.startPageMonitoring();
+            
+            console.log('Content script initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize content script:', error);
+
+            if (error.message && error.message.includes('Extension context invalidated')) {
+                console.log('Will retry initialization in 5 seconds');
+                setTimeout(() => this.init(), 5000);
+            }
+        }
+    }
+
+    // Start monitoring page changes and DOM updates
+    startPageMonitoring() {
+        // Monitor URL changes (SPA navigation)
+        this.startUrlMonitoring();
+        
+        // Monitor DOM changes
+        this.startDomMonitoring();
+    }
+
+    // Monitor URL changes for SPA navigation
+    startUrlMonitoring() {
+        // Check URL changes periodically
+        setInterval(() => {
+            if (window.location.href !== this.currentUrl) {
+                console.log('URL changed from', this.currentUrl, 'to', window.location.href);
+                this.currentUrl = window.location.href;
+                this.handlePageChange();
+            }
+        }, 1000);
+
+        // Also listen for popstate events (back/forward navigation)
+        window.addEventListener('popstate', () => {
+            setTimeout(() => {
+                this.handlePageChange();
+            }, 500);
+        });
+
+        // Listen for pushstate/replacestate (programmatic navigation)
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+
+        history.pushState = function(...args) {
+            originalPushState.apply(history, args);
+            setTimeout(() => {
+                window.dispatchEvent(new Event('urlchange'));
+            }, 100);
+        };
+
+        history.replaceState = function(...args) {
+            originalReplaceState.apply(history, args);
+            setTimeout(() => {
+                window.dispatchEvent(new Event('urlchange'));
+            }, 100);
+        };
+
+        window.addEventListener('urlchange', () => {
+            this.handlePageChange();
+        });
+    }
+
+    // Monitor DOM changes more comprehensively
+    startDomMonitoring() {
+        if (this.observer) {
+            this.observer.disconnect();
+        }
+
+        this.observer = new MutationObserver((mutations) => {
+            let shouldCheck = false;
+
+            for (const mutation of mutations) {
+                // Check if sidebar-related elements were added/removed
+                if (mutation.type === 'childList') {
+                    const addedNodes = Array.from(mutation.addedNodes);
+                    const removedNodes = Array.from(mutation.removedNodes);
+                    
+                    // Check if sidebar or navigation elements were modified
+                    const hasNavChanges = [...addedNodes, ...removedNodes].some(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            return node.classList?.contains('side-nav') ||
+                                   node.classList?.contains('space-dynamic__left') ||
+                                   node.querySelector?.('.side-nav') ||
+                                   node.classList?.contains('bili-download-item');
+                        }
+                        return false;
+                    });
+
+                    if (hasNavChanges) {
+                        shouldCheck = true;
+                        break;
+                    }
+                }
+            }
+
+            if (shouldCheck) {
+                // Debounce to avoid excessive checks
+                clearTimeout(this.checkTimeout);
+                this.checkTimeout = setTimeout(() => {
+                    this.setupDownloadButton();
+                }, 500);
+            }
+        });
+
+        this.observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: false
+        });
+    }
+
+    // Handle page change events
+    handlePageChange() {
+        console.log('Page changed, rechecking download button');
+        
+        // Reset button reference since page content might have changed
+        this.downloadButton = null;
+        
+        // Wait a bit for the new page to load
+        setTimeout(() => {
+            this.setupDownloadButton();
+        }, 1000);
+    }
+
+    // Setup download button (main entry point)
+    setupDownloadButton() {
+        if (this.isSupportedPage()) {
+            this.addDownloadButton();
+        } else {
+            // Remove button if page no longer supports download
+            this.removeDownloadButton();
+        }
+    }
+
+    // Remove download button
+    removeDownloadButton() {
+        if (this.downloadButton && this.downloadButton.parentNode) {
+            this.downloadButton.parentNode.removeChild(this.downloadButton);
+            this.downloadButton = null;
+            console.log('Download button removed (unsupported page)');
+        }
+    }
+
+    // Check if current page supports download functionality
+    isSupportedPage() {
+        const url = window.location.href;
+        return url.includes('t.bilibili.com') || 
+               (url.includes('space.bilibili.com') && url.includes('dynamic'));
+    }
+
+    // Add download button to sidebar navigation
+    addDownloadButton() {
+        // Don't add if button already exists
+        if (this.downloadButton && document.body.contains(this.downloadButton)) {
+            return;
+        }
+
+        // Wait for sidebar to load with more persistent checking
+        const maxAttempts = 20;
+        let attempts = 0;
+
+        const checkSidebar = () => {
+            attempts++;
+            const sideNav = document.querySelector('.side-nav');
+            
+            if (sideNav && !sideNav.querySelector('.bili-download-item')) {
+                this.injectDownloadButton(sideNav);
+            } else if (attempts < maxAttempts) {
+                // Retry with exponential backoff
+                const delay = Math.min(500 * Math.pow(1.2, attempts), 3000);
+                setTimeout(checkSidebar, delay);
+            }
+        };
+
+        checkSidebar();
+    }
+
+    // Inject download button into sidebar
+    injectDownloadButton(sideNav) {
+        // Double check we don't already have a button
+        if (sideNav.querySelector('.bili-download-item')) {
+            return;
+        }
+
+        // Create download button with Bilibili's native style
+        const downloadItem = document.createElement('div');
+        downloadItem.className = 'side-nav__item bili-download-item';
+        downloadItem.innerHTML = `
+            <div class="side-nav__item__main">
+                <span class="side-nav__item__main-text">下载图片</span>
+            </div>
+            <div class="side-nav__item__sub">
+                <span class="bili-download-settings">设置</span>
+                <span class="bili-download-status">就绪</span>
+            </div>
+        `;
+
+        // Add custom styles to match Bilibili theme (only add once)
+        if (!document.querySelector('#bili-download-styles')) {
+            const style = document.createElement('style');
+            style.id = 'bili-download-styles';
+            style.textContent = `
+                .bili-download-item {
+                    cursor: pointer;
+                    transition: background-color 0.2s ease;
+                }
+                
+                .bili-download-item:hover {
+                    background-color: rgba(0, 135, 189, 0.1);
+                }
+                
+                .bili-download-item.downloading {
+                    background-color: rgba(0, 135, 189, 0.1);
+                }
+                
+                .bili-download-item .side-nav__item__main-text {
+                    color: #0087BD;
+                }
+                
+                .bili-download-status {
+                    font-size: 12px;
+                    color: #999;
+                }
+                
+                .bili-download-settings {
+                    font-size: 12px;
+                    color: #0087BD;
+                    margin-right: 8px;
+                    cursor: pointer;
+                }
+                
+                .bili-download-settings:hover {
+                    text-decoration: underline;
+                }
+                
+                .bili-download-item.downloading .bili-download-status {
+                    color: #0087BD;
+                }
+                
+                /* Dark mode styles */
+                @media (prefers-color-scheme: dark) {
+                    .bili-download-item:hover {
+                        background-color: rgba(0, 149, 210, 0.2);
+                    }
+                    
+                    .bili-download-item.downloading {
+                        background-color: rgba(0, 149, 210, 0.2);
+                    }
+                    
+                    .bili-download-item .side-nav__item__main-text {
+                        color: #0095d2;
+                    }
+                    
+                    .bili-download-status {
+                        color: #aaa;
+                    }
+                    
+                    .bili-download-settings {
+                        color: #0095d2;
+                    }
+                    
+                    .bili-download-item.downloading .bili-download-status {
+                        color: #0095d2;
+                    }
+                }
+            `;
+            
+            document.head.appendChild(style);
+        }
+
+        // Add click event handler for download button
+        downloadItem.querySelector('.side-nav__item__main').addEventListener('click', () => {
+            this.startDownloadFromSidebar();
+        });
+
+        // Add click event handler for settings button
+        downloadItem.querySelector('.bili-download-settings').addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent triggering the main button click
+            this.openSettings();
+        });
+
+        // Insert after the last nav item
+        sideNav.appendChild(downloadItem);
+        this.downloadButton = downloadItem;
+
+        console.log('Download button added to sidebar');
+    }
+
+    // Open settings popup
+    openSettings() {
+        try {
+
+            if (chrome.runtime && chrome.runtime.id) {
+
+                chrome.runtime.sendMessage({
+                    type: 'openPopup'
+                }).catch(error => {
+                    console.error('Failed to open settings popup:', error);
+                    this.showSettingsNotification('无法打开设置，请刷新页面后重试');
+                });
+                console.log('Opening popup settings');
+            } else {
+
+                console.error('Extension context invalidated');
+                this.showSettingsNotification('扩展上下文已失效，请刷新页面');
+                
+
+                this.attemptRecovery();
+            }
+        } catch (error) {
+            console.error('Error opening settings:', error);
+            this.showSettingsNotification('打开设置时出错，请刷新页面后重试');
+        }
+    }
+    
+
+    attemptRecovery() {
+
+        this.removeDownloadButton();
+        
+
+        setTimeout(() => {
+            this.setupDownloadButton();
+        }, 2000);
+    }
+
+    // Start download process from sidebar button
+    async startDownloadFromSidebar() {
+        if (this.isDownloading) return;
+
+        try {
+            // 检查扩展上下文是否有效
+            if (!chrome.runtime || !chrome.runtime.id) {
+                console.error('Extension context invalidated');
+                this.showSettingsNotification('扩展上下文已失效，请刷新页面');
+                this.attemptRecovery();
+                return;
+            }
+
+            this.isDownloading = true;
+            this.updateDownloadStatus('扫描中...', true);
+
+            // Get current page dynamics
+            const settings = await this.getDefaultSettings();
+            const dynamics = await this.extractDynamics(settings);
+
+            if (dynamics.length === 0) {
+                this.updateDownloadStatus('未找到图片', false);
+                setTimeout(() => {
+                    this.updateDownloadStatus('就绪', false);
+                }, 3000);
+                return;
+            }
+
+            // 添加下载数量限制提示
+            const maxDownloads = settings.maxDownloads || 0;
+            let statusText = `找到 ${dynamics.length} 条动态`;
+            
+            // 如果应用了限制，且实际动态数量超过限制，显示提示
+            if (maxDownloads > 0) {
+                const totalFound = document.querySelectorAll('.bili-dyn-list .bili-dyn-item').length;
+                if (totalFound > maxDownloads) {
+                    statusText += ` (已限制，共${totalFound}条)`;
+                }
+            }
+            
+            this.updateDownloadStatus(statusText, true);
+
+            // Send to background script for processing
+            try {
+                await chrome.runtime.sendMessage({
+                    type: 'startDownload',
+                    dynamics: dynamics,
+                    settings: settings
+                });
+            } catch (error) {
+                console.error('Failed to send message to background script:', error);
+                throw new Error('与扩展通信失败，请刷新页面后重试');
+            }
+
+        } catch (error) {
+            console.error('Download failed:', error);
+            this.updateDownloadStatus('下载失败', false);
+            
+
+            if (error.message.includes('Extension context invalidated') || 
+                error.message.includes('与扩展通信失败')) {
+                this.showSettingsNotification(error.message);
+            }
+            
+            setTimeout(() => {
+                this.updateDownloadStatus('就绪', false);
+            }, 3000);
+        } finally {
+            // Reset downloading state after a delay
+            setTimeout(() => {
+                this.isDownloading = false;
+            }, 1000);
+        }
+    }
+
+    // Update download button status
+    updateDownloadStatus(text, isDownloading = false) {
+        if (!this.downloadButton || !document.body.contains(this.downloadButton)) return;
+
+        const statusEl = this.downloadButton.querySelector('.bili-download-status');
+        if (statusEl) {
+            statusEl.textContent = text;
+        }
+
+        if (isDownloading) {
+            this.downloadButton.classList.add('downloading');
+        } else {
+            this.downloadButton.classList.remove('downloading');
+        }
+    }
+
+    // Get default settings for sidebar download
+    async getDefaultSettings() {
+        try {
+            const result = await chrome.storage.local.get('bilibiliDownloaderSettings');
+            const defaultSettings = {
+                fileNamePattern: '{original}.{ext}',
+                skipReference: true,
+                skipDownloaded: true,
+                downloadInterval: 2,
+                retryLimit: 3,
+                maxDownloads: 100
+            };
+            return { ...defaultSettings, ...result.bilibiliDownloaderSettings };
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+            return {
+                fileNamePattern: '{original}.{ext}',
+                skipReference: true,
+                skipDownloaded: true,
+                downloadInterval: 2,
+                retryLimit: 3,
+                maxDownloads: 100
+            };
+        }
+    }
+
+    // Load downloaded dynamic IDs from storage
+    async loadDownloadedIds() {
+        try {
+
+            if (!chrome.runtime || !chrome.runtime.id) {
+                console.error('Extension context invalidated in loadDownloadedIds');
+                return;
+            }
+
+            const result = await chrome.storage.local.get('downloadedDynamics');
+            if (result.downloadedDynamics) {
+                this.downloadedIds = new Set(result.downloadedDynamics);
+            }
+        } catch (error) {
+            console.error('Failed to load download history:', error);
+
+            if (error.message && error.message.includes('Extension context invalidated')) {
+                this.attemptRecovery();
+            }
+        }
+    }
+
+    // Save downloaded dynamic ID to storage
+    async saveDownloadedId(dynamicId) {
+        try {
+
+            if (!chrome.runtime || !chrome.runtime.id) {
+                console.error('Extension context invalidated in saveDownloadedId');
+                return;
+            }
+
+            this.downloadedIds.add(dynamicId);
+            await chrome.storage.local.set({
+                downloadedDynamics: Array.from(this.downloadedIds)
+            });
+        } catch (error) {
+            console.error('Failed to save download history:', error);
+
+            if (error.message && error.message.includes('Extension context invalidated')) {
+                this.attemptRecovery();
+            }
+        }
+    }
+
+    // Handle messages from popup and background
+    async handleMessage(message, sendResponse) {
+        try {
+
+            if (!chrome.runtime || !chrome.runtime.id) {
+                console.error('Extension context invalidated in handleMessage');
+                sendResponse({ success: false, error: 'Extension context invalidated' });
+                return;
+            }
+
+            switch (message.type) {
+                case 'ping':
+                    sendResponse({ success: true, message: 'Content script ready' });
+                    break;
+                case 'getDynamics':
+                    const dynamics = await this.extractDynamics(message.settings);
+                    sendResponse({ success: true, dynamics });
+                    break;
+                case 'markAsDownloaded':
+                    await this.saveDownloadedId(message.dynamicId);
+                    sendResponse({ success: true });
+                    break;
+                case 'downloadProgress':
+                    // Update sidebar button status
+                    if (message.data && message.data.current && message.data.total) {
+                        this.updateDownloadStatus(
+                            `下载中 ${message.data.current}/${message.data.total}`, 
+                            true
+                        );
+                    }
+                    sendResponse({ success: true });
+                    break;
+                case 'downloadComplete':
+                    // Update sidebar button status
+                    const data = message.data;
+                    if (data.stopped) {
+                        this.updateDownloadStatus('已停止', false);
+                    } else {
+                        this.updateDownloadStatus(`完成! ${data.success} 成功`, false);
+                    }
+                    setTimeout(() => {
+                        this.updateDownloadStatus('就绪', false);
+                    }, 5000);
+                    sendResponse({ success: true });
+                    break;
+                case 'openSettingsFromSidebar':
+                    // This is a fallback for browsers that don't support chrome.action.openPopup
+                    // Show a notification to the user
+                    this.showSettingsNotification();
+                    sendResponse({ success: true });
+                    break;
+                default:
+                    sendResponse({ success: false, error: 'Unknown message type' });
+            }
+        } catch (error) {
+            console.error('Failed to handle message:', error);
+            
+
+            if (error.message && (
+                error.message.includes('Extension context invalidated') || 
+                !chrome.runtime || 
+                !chrome.runtime.id
+            )) {
+                console.error('Extension context invalidated during message handling');
+                this.attemptRecovery();
+            }
+            
+            sendResponse({ success: false, error: error.message });
+        }
+    }
+
+    // Show notification for browsers that don't support popup opening
+    showSettingsNotification(message = '请点击浏览器工具栏中的插件图标打开设置') {
+        // Create a notification element
+        const notification = document.createElement('div');
+        notification.className = 'bili-download-notification';
+        notification.innerHTML = `
+            <div class="bili-download-notification-content">
+                <span>${message}</span>
+                <button class="bili-download-notification-close">×</button>
+            </div>
+        `;
+
+        // Add styles for the notification
+        if (!document.querySelector('#bili-download-notification-styles')) {
+            const style = document.createElement('style');
+            style.id = 'bili-download-notification-styles';
+            style.textContent = `
+                .bili-download-notification {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 10000;
+                    animation: bili-download-notification-fade 0.3s ease-in-out;
+                }
+                
+                .bili-download-notification-content {
+                    background-color: #0087BD;
+                    color: white;
+                    padding: 12px 16px;
+                    border-radius: 4px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                
+                .bili-download-notification-close {
+                    background: none;
+                    border: none;
+                    color: white;
+                    font-size: 18px;
+                    cursor: pointer;
+                    padding: 0;
+                    margin: 0;
+                }
+                
+                @keyframes bili-download-notification-fade {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                
+                @media (prefers-color-scheme: dark) {
+                    .bili-download-notification-content {
+                        background-color: #0095d2;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Add close button event
+        notification.querySelector('.bili-download-notification-close').addEventListener('click', () => {
+            document.body.removeChild(notification);
+        });
+
+        // Auto-remove after 5 seconds
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
+        }, 5000);
+    }
+
+    // Extract dynamics from current page
+    async extractDynamics(settings) {
+        const dynamics = [];
+        
+        try {
+            let dynamicCards = [];
+            
+            if (window.location.hostname === 't.bilibili.com') {
+                dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item');
+            } else if (window.location.hostname === 'space.bilibili.com') {
+                dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item');
+            }
+
+            console.log(`Found ${dynamicCards.length} dynamic cards`);
+
+
+            const maxDownloads = settings.maxDownloads || 0;
+            let processedCount = 0;
+
+            for (const card of dynamicCards) {
+                try {
+
+                    if (maxDownloads > 0 && dynamics.length >= maxDownloads) {
+                        console.log(`Reached maximum download limit (${maxDownloads}), stopping extraction`);
+                        break;
+                    }
+
+                    const dynamicInfo = await this.extractDynamicInfo(card, settings);
+                    if (dynamicInfo) {
+                        dynamics.push(dynamicInfo);
+                    }
+                } catch (error) {
+                    console.error('Failed to extract dynamic info:', error);
+                }
+                
+                
+                processedCount++;
+                if (processedCount % 10 === 0) {
+                    console.log(`Processed ${processedCount}/${dynamicCards.length} dynamics, found ${dynamics.length} valid ones`);
+                }
+            }
+
+            console.log(`Successfully extracted ${dynamics.length} valid dynamics${maxDownloads > 0 ? ` (max limit: ${maxDownloads})` : ''}`);
+            return dynamics;
+
+        } catch (error) {
+            console.error('Failed to extract dynamics:', error);
+            throw error;
+        }
+    }
+
+    // Extract information from single dynamic card
+    async extractDynamicInfo(card, settings) {
+        try {
+            const opusCard = card.querySelector('[dyn-id]');
+            if (!opusCard) {
+                return null;
+            }
+
+            const dynamicId = opusCard.getAttribute('dyn-id');
+            if (!dynamicId) {
+                return null;
+            }
+
+            // Check if already downloaded
+            if (settings.skipDownloaded && this.downloadedIds.has(dynamicId)) {
+                console.log(`Skipping downloaded dynamic: ${dynamicId}`);
+                return null;
+            }
+
+            // Check if reposted dynamic
+            if (settings.skipReference && card.querySelector('.reference')) {
+                console.log(`Skipping reposted dynamic: ${dynamicId}`);
+                return null;
+            }
+
+            // Check if contains images
+            const hasImages = card.querySelector('.bili-album') || 
+                             card.querySelector('.bili-dyn-gallery') ||
+                             card.querySelector('.bili-album__preview__picture');
+
+            if (!hasImages) {
+                console.log(`Dynamic has no images, skipping: ${dynamicId}`);
+                return null;
+            }
+
+            // Get user information
+            const userNameEl = card.querySelector('.bili-dyn-item__author__name') ||
+                              card.querySelector('.bili-dyn-author__name');
+            const userName = userNameEl ? userNameEl.textContent.trim() : '';
+
+            // Get dynamic content
+            const contentEl = card.querySelector('.bili-rich-text__content') ||
+                             card.querySelector('.bili-dyn-content__text');
+            const content = contentEl ? contentEl.textContent.trim() : '';
+
+            // Get publish time
+            const timeEl = card.querySelector('.bili-dyn-time');
+            const timeText = timeEl ? timeEl.textContent.trim() : '';
+
+            return {
+                dynamicId,
+                userName,
+                content: content.substring(0, 100),
+                timeText,
+                hasImages: true
+            };
+
+        } catch (error) {
+            console.error('Failed to extract dynamic info:', error);
+            return null;
+        }
+    }
+
+    // Wait for element to appear
+    waitForElement(selector, timeout = 5000) {
+        return new Promise((resolve, reject) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                resolve(element);
+                return;
+            }
+
+            const observer = new MutationObserver(() => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    observer.disconnect();
+                    resolve(element);
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            setTimeout(() => {
+                observer.disconnect();
+                reject(new Error(`Element timeout: ${selector}`));
+            }, timeout);
+        });
+    }
+
+    // Scroll page to load more content
+    async scrollToLoadMore(maxScrolls = 5) {
+        let scrollCount = 0;
+        const initialHeight = document.body.scrollHeight;
+
+        while (scrollCount < maxScrolls) {
+            window.scrollTo(0, document.body.scrollHeight);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            if (document.body.scrollHeight === initialHeight) {
+                break;
+            }
+            
+            scrollCount++;
+        }
+
+        window.scrollTo(0, 0);
+    }
+}
+
+new BilibiliContentScript(); 

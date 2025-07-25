@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>Bili-DynamicImage</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Bili-DynamicImage</h1>
+        </div>
+
+        <div class="main-content">
+            <button id="downloadBtn" class="download-btn">
+                <span class="btn-text">下载图片</span>
+            </button>
+
+            <div id="progressSection" class="progress-section" style="display: none;">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div class="progress-details">
+                    <span id="progressText">准备中...</span>
+                    <span id="progressCount">0 / 0</span>
+                </div>
+                <button id="stopBtn" class="stop-btn">停止</button>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-header" id="settingsToggle">
+                    <span>设置</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div id="settingsContent" class="settings-content" style="display: none;">
+                    <div class="setting-item">
+                        <label for="fileNamePattern">命名规则:</label>
+                        <input type="text" id="fileNamePattern" placeholder="{original}.{ext}">
+                        
+                        <div class="format-help">
+                            <div class="format-title">点击快速插入格式:</div>
+                            <div class="format-buttons">
+                                <button class="format-btn" data-format="{original}.{ext}" title="原始文件名 (例: image.jpg)">原始名称</button>
+                                <button class="format-btn" data-format="{username}_{index}.{ext}" title="UP主用户名+序号 (例: 用户名_1.jpg)">用户名+序号</button>
+                                <button class="format-btn" data-format="{YYYY}{MM}{DD}_{original}.{ext}" title="日期+原始文件名 (例: 20230615_image.jpg)">日期+原始名</button>
+                                <button class="format-btn" data-format="{dynamicid}_{index}.{ext}" title="动态ID+序号 (例: 12345678_1.jpg)">动态ID+序号</button>
+                                <button class="format-btn" data-format="{username}_{YYYY}{MM}{DD}_{index}.{ext}" title="用户名+日期+序号 (例: 用户名_20230615_1.jpg)">用户名+日期+序号</button>
+                            </div>
+                            <div class="format-info">
+                                <p>可用变量: <span class="format-var">{original}</span> 原文件名, <span class="format-var">{ext}</span> 扩展名, 
+                                <span class="format-var">{username}</span> UP主名, <span class="format-var">{index}</span> 序号, 
+                                <span class="format-var">{dynamicid}</span> 动态ID, <span class="format-var">{YYYY}</span> 年, 
+                                <span class="format-var">{MM}</span> 月, <span class="format-var">{DD}</span> 日</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <label for="downloadPath">下载路径:</label>
+                        <input type="text" id="downloadPath" placeholder="BiliDynamic">
+                        <div class="path-help">
+                            <p>相对于浏览器默认下载文件夹的路径，例如: <span class="path-example">BiliDynamic/Images</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <label>
+                            <input type="checkbox" id="skipReference"> 跳过转发
+                        </label>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <label>
+                            <input type="checkbox" id="skipDownloaded"> 跳过已下载
+                        </label>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <label for="downloadInterval">下载间隔:</label>
+                        <input type="number" id="downloadInterval" min="1" max="10" value="2">
+                    </div>
+                    
+                    <div class="setting-item">
+                        <label for="retryLimit">重试次数:</label>
+                        <input type="number" id="retryLimit" min="0" max="10" value="3">
+                    </div>
+                    
+                    <div class="setting-item">
+                        <label for="maxDownloads">最大下载数量:</label>
+                        <input type="number" id="maxDownloads" min="1" max="1000" value="100">
+                        <div class="setting-help">
+                            <p>限制单次下载的最大动态数量，设为0表示不限制</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-content">
+                <span id="statusText">就绪</span>
+                <a href="#" id="githubLink" class="github-link">GitHub</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 
