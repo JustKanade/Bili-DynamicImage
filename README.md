@@ -1,3 +1,3 @@
 <p align="center">
-  <img src="logo.png" alt="Bili-DynamicImage">
+  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/icons/logo.png" alt="" width="300px">
 </p>
