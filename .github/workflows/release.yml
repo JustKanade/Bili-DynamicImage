@@ -1,0 +1,111 @@
+name: Release Pre-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号 (例如: v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 读取插件版本
+      id: get_version
+      run: |
+        VERSION=$(jq -r '.version' manifest.json)
+        echo "plugin_version=$VERSION" >> $GITHUB_OUTPUT
+        echo "插件版本: $VERSION"
+        
+    - name: 创建压缩包
+      run: |
+        PLUGIN_VERSION="${{ steps.get_version.outputs.plugin_version }}"
+        ZIP_NAME="Bili-DynamicImage-v${PLUGIN_VERSION}.zip"
+        
+        # 创建临时目录
+        mkdir -p temp_build
+        
+        # 复制所有文件到临时目录，排除指定文件和文件夹
+        rsync -av --progress . temp_build/ \
+          --exclude='.git' \
+          --exclude='.github' \
+          --exclude='.readme' \
+          --exclude='LICENSE' \
+          --exclude='.gitignore' \
+          --exclude='README.md' \
+          --exclude='temp_build'
+        
+        # 创建压缩包
+        cd temp_build
+        zip -r "../${ZIP_NAME}" .
+        cd ..
+        
+        echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
+        echo "创建压缩包: ${ZIP_NAME}"
+        
+    - name: 生成发布说明
+      id: release_notes
+      run: |
+        PLUGIN_VERSION="${{ steps.get_version.outputs.plugin_version }}"
+        cat << EOF > release_notes.md
+        ## Bili-DynamicImage v${PLUGIN_VERSION} 预发布版本
+        
+        ### 📦 插件信息
+        - **版本**: v${PLUGIN_VERSION}
+        - **类型**: Chrome扩展插件
+        - **功能**: 下载B站动态页面图片，支持批量下载
+        
+        ### ✨ 主要功能
+        - 🖼️ 批量下载B站动态中的图片
+        - 🎯 支持个人空间动态页面
+        - 🚀 一键下载，操作简便
+        - 📱 适配多种动态类型
+        
+        ### 📥 安装说明
+        1. 下载下方的 \`${ZIP_NAME}\` 文件
+        2. 解压到本地文件夹
+        3. 打开Chrome浏览器，进入扩展管理页面 (chrome://extensions/)
+        4. 开启"开发者模式"
+        5. 点击"加载已解压的扩展程序"，选择解压后的文件夹
+        6. 安装完成，在B站动态页面即可使用
+        
+        ### 🌐 支持页面
+        - https://t.bilibili.com/* (动态页面)
+        - https://space.bilibili.com/*/dynamic* (个人空间动态)
+        - https://www.bilibili.com/opus/* (图文动态)
+        
+        ### ⚠️ 注意事项
+        - 此为预发布版本，可能包含未完全测试的功能
+        - 建议在使用前备份重要数据
+        - 如遇问题请及时反馈
+        
+        ---
+        
+        **下载文件**: \`${ZIP_NAME}\`  
+        **发布时间**: $(date '+%Y-%m-%d %H:%M:%S UTC')
+        EOF
+        
+        echo "发布说明已生成"
+        
+    - name: 创建预发布
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.event.inputs.version }}
+        name: "Bili-DynamicImage ${{ github.event.inputs.version }} (预发布)"
+        body_path: release_notes.md
+        prerelease: true
+        files: ${{ env.ZIP_NAME }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 清理临时文件
+      run: |
+        rm -rf temp_build
+        rm -f release_notes.md
+        echo "清理完成" 
