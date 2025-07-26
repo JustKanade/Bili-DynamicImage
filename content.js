@@ -225,8 +225,17 @@ class BilibiliContentScript {
                 <span class="side-nav__item__main-text">下载图片</span>
             </div>
             <div class="side-nav__item__sub">
-                <span class="bili-download-settings">设置</span>
-                <span class="bili-download-status">就绪</span>
+                <span class="bili-download-settings" title="打开设置">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                <span class="bili-download-status" title="就绪" data-status="ready">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
             </div>
         `;
 
@@ -253,19 +262,68 @@ class BilibiliContentScript {
                 }
                 
                 .bili-download-status {
-                    font-size: 12px;
+                    color: #999;
+                    display: inline-flex;
+                    align-items: center;
+                    transition: all 0.2s ease;
+                }
+                
+                .bili-download-status svg {
+                    transition: all 0.2s ease;
+                }
+                
+                /* Status-specific colors and animations */
+                .bili-download-status[data-status="loading"] {
+                    color: #0087BD;
+                }
+                
+                .bili-download-status[data-status="loading"] svg {
+                    animation: spin 1s linear infinite;
+                }
+                
+                .bili-download-status[data-status="success"] {
+                    color: #52c41a;
+                }
+                
+                .bili-download-status[data-status="error"] {
+                    color: #ff4d4f;
+                }
+                
+                .bili-download-status[data-status="warning"] {
+                    color: #faad14;
+                }
+                
+                .bili-download-status[data-status="stopped"] {
+                    color: #8c8c8c;
+                }
+                
+                .bili-download-status[data-status="ready"] {
                     color: #999;
                 }
                 
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                
                 .bili-download-settings {
-                    font-size: 12px;
                     color: #0087BD;
                     margin-right: 8px;
                     cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    transition: all 0.2s ease;
+                    border-radius: 3px;
+                    padding: 2px;
                 }
                 
                 .bili-download-settings:hover {
-                    text-decoration: underline;
+                    background-color: rgba(0, 135, 189, 0.1);
+                    transform: scale(1.1);
+                }
+                
+                .bili-download-settings svg {
+                    transition: all 0.2s ease;
                 }
                 
                 .bili-download-item.downloading .bili-download-status {
@@ -294,8 +352,37 @@ class BilibiliContentScript {
                         color: #0095d2;
                     }
                     
+                    .bili-download-settings:hover {
+                        background-color: rgba(0, 149, 210, 0.2);
+                    }
+                    
                     .bili-download-item.downloading .bili-download-status {
                         color: #0095d2;
+                    }
+                    
+                    /* Dark mode status colors */
+                    .bili-download-status[data-status="loading"] {
+                        color: #0095d2;
+                    }
+                    
+                    .bili-download-status[data-status="success"] {
+                        color: #73d13d;
+                    }
+                    
+                    .bili-download-status[data-status="error"] {
+                        color: #ff7875;
+                    }
+                    
+                    .bili-download-status[data-status="warning"] {
+                        color: #ffc53d;
+                    }
+                    
+                    .bili-download-status[data-status="stopped"] {
+                        color: #bfbfbf;
+                    }
+                    
+                    .bili-download-status[data-status="ready"] {
+                        color: #aaa;
                     }
                 }
             `;
@@ -317,6 +404,9 @@ class BilibiliContentScript {
         // Insert after the last nav item
         sideNav.appendChild(downloadItem);
         this.downloadButton = downloadItem;
+        
+        // Initialize with ready status
+        this.updateDownloadStatus('就绪', false);
 
         console.log('Download button added to sidebar');
     }
@@ -434,19 +524,80 @@ class BilibiliContentScript {
         }
     }
 
-    // Update download button status
+    // Update download button status with icons
     updateDownloadStatus(text, isDownloading = false) {
         if (!this.downloadButton || !document.body.contains(this.downloadButton)) return;
 
         const statusEl = this.downloadButton.querySelector('.bili-download-status');
         if (statusEl) {
-            statusEl.textContent = text;
+            // Update tooltip
+            statusEl.title = text;
+            
+            // Update icon based on status
+            statusEl.innerHTML = this.getStatusIcon(text, isDownloading);
+            statusEl.setAttribute('data-status', this.getStatusType(text, isDownloading));
         }
 
         if (isDownloading) {
             this.downloadButton.classList.add('downloading');
         } else {
             this.downloadButton.classList.remove('downloading');
+        }
+    }
+    
+    // Get appropriate icon for status
+    getStatusIcon(text, isDownloading) {
+        if (isDownloading || text.includes('扫描') || text.includes('下载中')) {
+            // Loading/spinning icon
+            return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`;
+        } else if (text.includes('完成') || text.includes('成功')) {
+            // Success icon
+            return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`;
+        } else if (text.includes('失败') || text.includes('错误')) {
+            // Error icon
+            return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="2"/>
+                <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="2"/>
+            </svg>`;
+        } else if (text.includes('停止')) {
+            // Stop icon
+            return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <rect x="6" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2" fill="currentColor"/>
+            </svg>`;
+        } else if (text.includes('未找到')) {
+            // Warning icon
+            return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2"/>
+                <circle cx="12" cy="17" r="1" fill="currentColor"/>
+            </svg>`;
+        } else {
+            // Default ready icon
+            return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`;
+        }
+    }
+    
+    // Get status type for CSS styling
+    getStatusType(text, isDownloading) {
+        if (isDownloading || text.includes('扫描') || text.includes('下载中')) {
+            return 'loading';
+        } else if (text.includes('完成') || text.includes('成功')) {
+            return 'success';
+        } else if (text.includes('失败') || text.includes('错误')) {
+            return 'error';
+        } else if (text.includes('停止')) {
+            return 'stopped';
+        } else if (text.includes('未找到')) {
+            return 'warning';
+        } else {
+            return 'ready';
         }
     }
 
