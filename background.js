@@ -46,6 +46,10 @@ class BilibiliDownloadManager {
                         downloadStopped: this.downloadStopped || false
                     });
                     break;
+                case 'downloadSelectedImages':
+                    await this.downloadSelectedImages(message.images, message.dynamicInfo);
+                    sendResponse({ success: true });
+                    break;
                 default:
                     sendResponse({ success: false, error: '未知消息类型' });
             }
@@ -227,6 +231,87 @@ class BilibiliDownloadManager {
                 console.error(`图片下载失败: ${pictureName}`, error);
                 throw error;
             }
+        }
+    }
+
+    // Download selected images from a single dynamic
+    async downloadSelectedImages(selectedImages, dynamicInfo) {
+        try {
+            console.log(`Starting selected images download: ${selectedImages.length} images`);
+            
+            // Load settings
+            const result = await chrome.storage.local.get('bilibiliDownloaderSettings');
+            const settings = result.bilibiliDownloaderSettings || {};
+            
+            for (let i = 0; i < selectedImages.length; i++) {
+                const image = selectedImages[i];
+                const originalName = this.extractFilename(image.url);
+                
+                // Generate filename using the same pattern as batch download
+                const pictureName = this.generateFileName(
+                    settings.fileNamePattern || '{original}.{ext}',
+                    originalName,
+                    image.index + 1,
+                    {
+                        card: {
+                            desc: {
+                                user_profile: {
+                                    info: {
+                                        uname: dynamicInfo.userName
+                                    }
+                                },
+                                dynamic_id: dynamicInfo.dynamicId,
+                                timestamp: dynamicInfo.timestamp
+                            }
+                        }
+                    }
+                );
+
+                try {
+                    await this.downloadFile(image.url, pictureName, settings);
+                    console.log(`Downloaded selected image: ${pictureName}`);
+                    
+                    // Send success notification to content script
+                    this.sendToContentScript({
+                        type: 'imageDownloaded',
+                        filename: pictureName,
+                        index: i + 1,
+                        total: selectedImages.length
+                    });
+                    
+                } catch (error) {
+                    console.error(`Failed to download selected image: ${pictureName}`, error);
+                    
+                    // Send error notification to content script
+                    this.sendToContentScript({
+                        type: 'imageDownloadError',
+                        filename: pictureName,
+                        error: error.message,
+                        index: i + 1,
+                        total: selectedImages.length
+                    });
+                }
+                
+                // Add delay between downloads
+                if (i < selectedImages.length - 1) {
+                    await this.sleep(settings.downloadInterval || 2);
+                }
+            }
+            
+            // Send completion notification
+            this.sendToContentScript({
+                type: 'selectedImagesDownloadComplete',
+                total: selectedImages.length
+            });
+            
+        } catch (error) {
+            console.error('Failed to download selected images:', error);
+            
+            // Send error notification
+            this.sendToContentScript({
+                type: 'selectedImagesDownloadError',
+                error: error.message
+            });
         }
     }
 

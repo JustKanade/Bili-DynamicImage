@@ -120,10 +120,29 @@ class BilibiliContentScript {
                         }
                         return false;
                     });
+                    
+                    // Check if dropdown menus were added (for injecting download option)
+                    const hasMenuChanges = [...addedNodes].some(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            return node.classList?.contains('bili-cascader-options') ||
+                                   node.querySelector?.('.bili-cascader-options') ||
+                                   node.classList?.contains('bili-dropdown-options') ||
+                                   node.querySelector?.('.bili-dropdown-options');
+                        }
+                        return false;
+                    });
 
                     if (hasNavChanges) {
                         shouldCheck = true;
                         break;
+                    }
+                    
+                    if (hasMenuChanges) {
+                        // Handle menu injection separately with shorter delay
+                        clearTimeout(this.menuTimeout);
+                        this.menuTimeout = setTimeout(() => {
+                            this.injectDownloadMenuItem();
+                        }, 100);
                     }
                 }
             }
@@ -467,6 +486,648 @@ class BilibiliContentScript {
         setTimeout(() => {
             this.setupDownloadButton();
         }, 2000);
+    }
+
+    // Inject download option into dynamic menu
+    injectDownloadMenuItem() {
+        try {
+            // Find all visible dropdown menus
+            const menus = document.querySelectorAll('.bili-cascader-options, .bili-dropdown-options');
+            
+            for (const menu of menus) {
+                // Check if this menu contains a "举报" option and doesn't already have our download option
+                const reportItem = menu.querySelector('.bili-cascader-options__item-label');
+                if (reportItem && reportItem.textContent.includes('举报') && !menu.querySelector('.bili-download-menu-item')) {
+                    this.addDownloadMenuOption(menu, reportItem);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to inject download menu item:', error);
+        }
+    }
+
+    // Add download option to dynamic menu
+    addDownloadMenuOption(menu, reportItem) {
+        try {
+            // Create download menu item with native styling
+            const downloadItem = document.createElement('div');
+            downloadItem.className = 'bili-cascader-options__item bili-download-menu-item';
+            downloadItem.innerHTML = `
+                <div class="bili-cascader-options__item-label">下载图片</div>
+            `;
+
+            // Add click handler
+            downloadItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.handleMenuDownloadClick(downloadItem);
+            });
+
+            // Insert after the report item
+            const reportContainer = reportItem.closest('.bili-cascader-options__item');
+            if (reportContainer && reportContainer.parentNode) {
+                reportContainer.parentNode.insertBefore(downloadItem, reportContainer.nextSibling);
+                console.log('Download menu item added');
+            }
+        } catch (error) {
+            console.error('Failed to add download menu option:', error);
+        }
+    }
+
+    // Handle download click from menu
+    async handleMenuDownloadClick(menuItem) {
+        try {
+            // Find the dynamic card that contains this menu
+            const dynamicCard = this.findDynamicCardFromMenu(menuItem);
+            if (!dynamicCard) {
+                this.showNotification('无法找到对应的动态卡片', 'error');
+                return;
+            }
+
+            // Extract dynamic information
+            const dynamicInfo = await this.extractDynamicInfo(dynamicCard, { skipDownloaded: false, skipReference: false });
+            if (!dynamicInfo) {
+                this.showNotification('该动态没有可下载的图片', 'warning');
+                return;
+            }
+
+            // Show image selector
+            this.showImageSelector(dynamicInfo, dynamicCard);
+            
+            // Close the menu
+            const menu = menuItem.closest('.bili-cascader-options, .bili-dropdown-options');
+            if (menu) {
+                menu.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Failed to handle menu download click:', error);
+            this.showNotification('下载失败: ' + error.message, 'error');
+        }
+    }
+
+    // Find dynamic card from menu element
+    findDynamicCardFromMenu(menuElement) {
+        let current = menuElement;
+        while (current && current !== document.body) {
+            current = current.parentElement;
+            if (current && current.classList.contains('bili-dyn-item')) {
+                return current;
+            }
+        }
+        
+        // If not found in parent hierarchy, try to find by proximity
+        const allCards = document.querySelectorAll('.bili-dyn-item');
+        for (const card of allCards) {
+            const rect = card.getBoundingClientRect();
+            const menuRect = menuElement.getBoundingClientRect();
+            
+            // Check if menu is near this card
+            if (Math.abs(rect.right - menuRect.left) < 100 && 
+                Math.abs(rect.top - menuRect.top) < 100) {
+                return card;
+            }
+        }
+        
+        return null;
+    }
+
+    // Show image selector modal
+    showImageSelector(dynamicInfo, dynamicCard) {
+        try {
+            // Remove existing selector if any
+            const existingSelector = document.querySelector('.bili-image-selector');
+            if (existingSelector) {
+                existingSelector.remove();
+            }
+
+            // Get images from dynamic card
+            const images = this.extractImagesFromCard(dynamicCard);
+            if (images.length === 0) {
+                this.showNotification('该动态没有可下载的图片', 'warning');
+                return;
+            }
+
+            // Create selector modal
+            const modal = this.createImageSelectorModal(images, dynamicInfo);
+            document.body.appendChild(modal);
+            
+            // Show modal with animation
+            requestAnimationFrame(() => {
+                modal.classList.add('visible');
+            });
+        } catch (error) {
+            console.error('Failed to show image selector:', error);
+            this.showNotification('显示图片选择器失败', 'error');
+        }
+    }
+
+    // Extract images from dynamic card
+    extractImagesFromCard(card) {
+        const images = [];
+        
+        try {
+            // Look for different image containers
+            const imageElements = card.querySelectorAll('.bili-album__preview__picture img, .bili-dyn-gallery img, .bili-album img');
+            
+            imageElements.forEach((img, index) => {
+                const src = img.src || img.dataset.src || img.getAttribute('data-src');
+                if (src && !src.includes('loading')) {
+                    images.push({
+                        index: index,
+                        url: src,
+                        originalUrl: this.getOriginalImageUrl(src),
+                        element: img
+                    });
+                }
+            });
+        } catch (error) {
+            console.error('Failed to extract images from card:', error);
+        }
+        
+        return images;
+    }
+
+    // Get original image URL from thumbnail
+    getOriginalImageUrl(thumbUrl) {
+        // Remove thumbnail parameters to get original image
+        return thumbUrl.replace(/@.*$/, '').replace(/\?.*$/, '');
+    }
+
+    // Create image selector modal
+    createImageSelectorModal(images, dynamicInfo) {
+        const modal = document.createElement('div');
+        modal.className = 'bili-image-selector';
+        modal.innerHTML = `
+            <div class="bili-image-selector__overlay"></div>
+            <div class="bili-image-selector__content">
+                <div class="bili-image-selector__header">
+                    <h3>选择要下载的图片</h3>
+                    <button class="bili-image-selector__close">×</button>
+                </div>
+                <div class="bili-image-selector__controls">
+                    <button class="bili-image-selector__select-all">全选</button>
+                    <button class="bili-image-selector__select-none">取消全选</button>
+                    <span class="bili-image-selector__counter">已选择: 0/${images.length}</span>
+                </div>
+                <div class="bili-image-selector__grid">
+                    ${images.map((img, index) => `
+                        <div class="bili-image-selector__item" data-index="${index}">
+                            <img src="${img.url}" alt="图片 ${index + 1}" loading="lazy">
+                            <div class="bili-image-selector__checkbox">
+                                <input type="checkbox" id="img-${index}" value="${index}">
+                                <label for="img-${index}"></label>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="bili-image-selector__footer">
+                    <button class="bili-image-selector__cancel">取消</button>
+                    <button class="bili-image-selector__download">下载选中图片</button>
+                </div>
+            </div>
+        `;
+
+        // Add event listeners
+        this.setupImageSelectorEvents(modal, images, dynamicInfo);
+        
+        // Add styles
+        this.addImageSelectorStyles();
+        
+        return modal;
+    }
+
+    // Setup image selector event listeners
+    setupImageSelectorEvents(modal, images, dynamicInfo) {
+        const overlay = modal.querySelector('.bili-image-selector__overlay');
+        const closeBtn = modal.querySelector('.bili-image-selector__close');
+        const cancelBtn = modal.querySelector('.bili-image-selector__cancel');
+        const selectAllBtn = modal.querySelector('.bili-image-selector__select-all');
+        const selectNoneBtn = modal.querySelector('.bili-image-selector__select-none');
+        const downloadBtn = modal.querySelector('.bili-image-selector__download');
+        const counter = modal.querySelector('.bili-image-selector__counter');
+        const checkboxes = modal.querySelectorAll('input[type="checkbox"]');
+
+        // Close modal handlers
+        const closeModal = () => {
+            modal.classList.remove('visible');
+            setTimeout(() => modal.remove(), 300);
+        };
+
+        overlay.addEventListener('click', closeModal);
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+
+        // Selection handlers
+        const updateCounter = () => {
+            const selected = modal.querySelectorAll('input[type="checkbox"]:checked').length;
+            counter.textContent = `已选择: ${selected}/${images.length}`;
+            downloadBtn.disabled = selected === 0;
+        };
+
+        selectAllBtn.addEventListener('click', () => {
+            checkboxes.forEach(cb => cb.checked = true);
+            updateCounter();
+        });
+
+        selectNoneBtn.addEventListener('click', () => {
+            checkboxes.forEach(cb => cb.checked = false);
+            updateCounter();
+        });
+
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', updateCounter);
+        });
+
+        // Download handler
+        downloadBtn.addEventListener('click', () => {
+            const selectedIndexes = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => parseInt(cb.value));
+            
+            if (selectedIndexes.length === 0) {
+                this.showNotification('请至少选择一张图片', 'warning');
+                return;
+            }
+
+            const selectedImages = selectedIndexes.map(index => images[index]);
+            this.downloadSelectedImages(selectedImages, dynamicInfo);
+            closeModal();
+        });
+
+        // Initial counter update
+        updateCounter();
+    }
+
+    // Download selected images
+    async downloadSelectedImages(selectedImages, dynamicInfo) {
+        try {
+            this.showNotification(`开始下载 ${selectedImages.length} 张图片...`, 'info');
+
+            // Send to background script for download
+            chrome.runtime.sendMessage({
+                type: 'downloadSelectedImages',
+                images: selectedImages.map(img => ({
+                    url: img.originalUrl,
+                    index: img.index
+                })),
+                dynamicInfo: dynamicInfo
+            });
+
+        } catch (error) {
+            console.error('Failed to download selected images:', error);
+            this.showNotification('下载失败: ' + error.message, 'error');
+        }
+    }
+
+    // Add image selector styles
+    addImageSelectorStyles() {
+        if (document.querySelector('#bili-image-selector-styles')) {
+            return;
+        }
+
+        const style = document.createElement('style');
+        style.id = 'bili-image-selector-styles';
+        style.textContent = `
+            .bili-image-selector {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                z-index: 10000;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s ease;
+            }
+
+            .bili-image-selector.visible {
+                opacity: 1;
+                visibility: visible;
+            }
+
+            .bili-image-selector__overlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+            }
+
+            .bili-image-selector__content {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                border-radius: 8px;
+                max-width: 90vw;
+                max-height: 90vh;
+                overflow: hidden;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            }
+
+            .bili-image-selector__header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 16px 20px;
+                border-bottom: 1px solid #e1e2e3;
+                background: #f7f8fa;
+            }
+
+            .bili-image-selector__header h3 {
+                margin: 0;
+                font-size: 16px;
+                color: #333;
+            }
+
+            .bili-image-selector__close {
+                background: none;
+                border: none;
+                font-size: 24px;
+                color: #999;
+                cursor: pointer;
+                padding: 0;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .bili-image-selector__close:hover {
+                color: #666;
+            }
+
+            .bili-image-selector__controls {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 12px 20px;
+                border-bottom: 1px solid #e1e2e3;
+                background: #fafbfc;
+            }
+
+            .bili-image-selector__controls button {
+                padding: 6px 12px;
+                border: 1px solid #0087BD;
+                background: white;
+                color: #0087BD;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: all 0.2s ease;
+            }
+
+            .bili-image-selector__controls button:hover {
+                background: #0087BD;
+                color: white;
+            }
+
+            .bili-image-selector__counter {
+                margin-left: auto;
+                font-size: 14px;
+                color: #666;
+            }
+
+            .bili-image-selector__grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 12px;
+                padding: 20px;
+                max-height: 400px;
+                overflow-y: auto;
+            }
+
+            .bili-image-selector__item {
+                position: relative;
+                aspect-ratio: 1;
+                border-radius: 6px;
+                overflow: hidden;
+                border: 2px solid transparent;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .bili-image-selector__item:hover {
+                border-color: #0087BD;
+            }
+
+            .bili-image-selector__item img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
+            .bili-image-selector__checkbox {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+            }
+
+            .bili-image-selector__checkbox input[type="checkbox"] {
+                display: none;
+            }
+
+            .bili-image-selector__checkbox label {
+                display: block;
+                width: 20px;
+                height: 20px;
+                border: 2px solid white;
+                border-radius: 4px;
+                background: rgba(0, 0, 0, 0.5);
+                cursor: pointer;
+                position: relative;
+                transition: all 0.2s ease;
+            }
+
+            .bili-image-selector__checkbox input[type="checkbox"]:checked + label {
+                background: #0087BD;
+                border-color: #0087BD;
+            }
+
+            .bili-image-selector__checkbox input[type="checkbox"]:checked + label::after {
+                content: '✓';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: white;
+                font-size: 12px;
+                font-weight: bold;
+            }
+
+            .bili-image-selector__footer {
+                display: flex;
+                justify-content: flex-end;
+                gap: 12px;
+                padding: 16px 20px;
+                border-top: 1px solid #e1e2e3;
+                background: #f7f8fa;
+            }
+
+            .bili-image-selector__footer button {
+                padding: 8px 16px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                transition: all 0.2s ease;
+            }
+
+            .bili-image-selector__cancel {
+                background: white;
+                color: #666;
+            }
+
+            .bili-image-selector__cancel:hover {
+                background: #f5f5f5;
+            }
+
+            .bili-image-selector__download {
+                background: #0087BD;
+                color: white;
+                border-color: #0087BD;
+            }
+
+            .bili-image-selector__download:hover:not(:disabled) {
+                background: #0078a8;
+            }
+
+            .bili-image-selector__download:disabled {
+                background: #ccc;
+                border-color: #ccc;
+                cursor: not-allowed;
+            }
+
+            /* Dark mode support */
+            @media (prefers-color-scheme: dark) {
+                .bili-image-selector__content {
+                    background: #1a1a1a;
+                    color: #e0e0e0;
+                }
+
+                .bili-image-selector__header,
+                .bili-image-selector__controls,
+                .bili-image-selector__footer {
+                    background: #2a2a2a;
+                    border-color: #3a3a3a;
+                }
+
+                .bili-image-selector__header h3 {
+                    color: #e0e0e0;
+                }
+
+                .bili-image-selector__controls button {
+                    background: #2a2a2a;
+                    color: #0095d2;
+                    border-color: #0095d2;
+                }
+
+                .bili-image-selector__controls button:hover {
+                    background: #0095d2;
+                    color: white;
+                }
+
+                .bili-image-selector__cancel {
+                    background: #2a2a2a;
+                    color: #aaa;
+                    border-color: #555;
+                }
+
+                .bili-image-selector__cancel:hover {
+                    background: #3a3a3a;
+                }
+
+                .bili-image-selector__download {
+                    background: #0095d2;
+                    border-color: #0095d2;
+                }
+
+                .bili-image-selector__download:hover:not(:disabled) {
+                    background: #00a7e9;
+                }
+            }
+        `;
+
+        document.head.appendChild(style);
+    }
+
+    // Show notification
+    showNotification(message, type = 'info') {
+        try {
+            // Remove existing notification
+            const existing = document.querySelector('.bili-download-notification');
+            if (existing) {
+                existing.remove();
+            }
+
+            // Create notification
+            const notification = document.createElement('div');
+            notification.className = `bili-download-notification bili-download-notification--${type}`;
+            notification.textContent = message;
+
+            // Add styles if not exists
+            if (!document.querySelector('#bili-notification-styles')) {
+                const style = document.createElement('style');
+                style.id = 'bili-notification-styles';
+                style.textContent = `
+                    .bili-download-notification {
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        padding: 12px 16px;
+                        border-radius: 6px;
+                        color: white;
+                        font-size: 14px;
+                        z-index: 10001;
+                        opacity: 0;
+                        transform: translateX(100%);
+                        transition: all 0.3s ease;
+                        max-width: 300px;
+                    }
+
+                    .bili-download-notification.show {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+
+                    .bili-download-notification--info {
+                        background: #0087BD;
+                    }
+
+                    .bili-download-notification--success {
+                        background: #52c41a;
+                    }
+
+                    .bili-download-notification--warning {
+                        background: #faad14;
+                    }
+
+                    .bili-download-notification--error {
+                        background: #ff4d4f;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            document.body.appendChild(notification);
+
+            // Show notification
+            requestAnimationFrame(() => {
+                notification.classList.add('show');
+            });
+
+            // Auto hide
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+
+        } catch (error) {
+            console.error('Failed to show notification:', error);
+        }
     }
 
     // Start download process from sidebar button
@@ -859,6 +1520,38 @@ class BilibiliContentScript {
                     // This is a fallback for browsers that don't support chrome.action.openPopup
                     // Show a notification to the user
                     this.showSettingsNotification();
+                    sendResponse({ success: true });
+                    break;
+                case 'imageDownloaded':
+                    // Handle individual image download success
+                    this.showNotification(
+                        `图片下载成功 (${message.index}/${message.total}): ${message.filename}`,
+                        'success'
+                    );
+                    sendResponse({ success: true });
+                    break;
+                case 'imageDownloadError':
+                    // Handle individual image download error
+                    this.showNotification(
+                        `图片下载失败 (${message.index}/${message.total}): ${message.error}`,
+                        'error'
+                    );
+                    sendResponse({ success: true });
+                    break;
+                case 'selectedImagesDownloadComplete':
+                    // Handle completion of selected images download
+                    this.showNotification(
+                        `所有选中图片下载完成 (共 ${message.total} 张)`,
+                        'success'
+                    );
+                    sendResponse({ success: true });
+                    break;
+                case 'selectedImagesDownloadError':
+                    // Handle error in selected images download
+                    this.showNotification(
+                        `选中图片下载失败: ${message.error}`,
+                        'error'
+                    );
                     sendResponse({ success: true });
                     break;
                 default:
