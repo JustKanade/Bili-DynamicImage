@@ -31,7 +31,10 @@ class BilibiliDownloader {
             filters: {
                 startDate: '',
                 endDate: '',
-                keywords: '',
+                includeKeywords: '',
+                excludeKeywords: '',
+                caseSensitive: false,
+                exactMatch: false,
                 minImageCount: '',
                 maxImageCount: '',
                 dynamicTypes: {
@@ -63,6 +66,26 @@ class BilibiliDownloader {
             // Ensure dynamicTypes exists
             if (!this.settings.filters.dynamicTypes) {
                 this.settings.filters.dynamicTypes = defaultSettings.filters.dynamicTypes;
+            }
+            
+            // Migrate old keywords setting to new format
+            if (this.settings.filters.keywords && !this.settings.filters.includeKeywords) {
+                this.settings.filters.includeKeywords = this.settings.filters.keywords;
+                delete this.settings.filters.keywords;
+            }
+            
+            // Ensure new keyword settings exist
+            if (this.settings.filters.includeKeywords === undefined) {
+                this.settings.filters.includeKeywords = '';
+            }
+            if (this.settings.filters.excludeKeywords === undefined) {
+                this.settings.filters.excludeKeywords = '';
+            }
+            if (this.settings.filters.caseSensitive === undefined) {
+                this.settings.filters.caseSensitive = false;
+            }
+            if (this.settings.filters.exactMatch === undefined) {
+                this.settings.filters.exactMatch = false;
             }
         } catch (error) {
             console.error('Failed to load settings:', error);
@@ -134,7 +157,10 @@ class BilibiliDownloader {
         const filters = this.settings.filters;
         document.getElementById('startDate').value = filters.startDate || '';
         document.getElementById('endDate').value = filters.endDate || '';
-        document.getElementById('keywords').value = filters.keywords || '';
+        document.getElementById('includeKeywords').value = filters.includeKeywords || '';
+        document.getElementById('excludeKeywords').value = filters.excludeKeywords || '';
+        document.getElementById('caseSensitive').checked = filters.caseSensitive || false;
+        document.getElementById('exactMatch').checked = filters.exactMatch || false;
         document.getElementById('minImageCount').value = filters.minImageCount || '';
         document.getElementById('maxImageCount').value = filters.maxImageCount || '';
         
@@ -261,8 +287,24 @@ class BilibiliDownloader {
             this.saveSettings();
         });
         
-        document.getElementById('keywords').addEventListener('change', (e) => {
-            this.settings.filters.keywords = e.target.value;
+        // New keyword filter event handlers
+        document.getElementById('includeKeywords').addEventListener('change', (e) => {
+            this.settings.filters.includeKeywords = e.target.value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('excludeKeywords').addEventListener('change', (e) => {
+            this.settings.filters.excludeKeywords = e.target.value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('caseSensitive').addEventListener('change', (e) => {
+            this.settings.filters.caseSensitive = e.target.checked;
+            this.saveSettings();
+        });
+        
+        document.getElementById('exactMatch').addEventListener('change', (e) => {
+            this.settings.filters.exactMatch = e.target.checked;
             this.saveSettings();
         });
         
@@ -359,8 +401,57 @@ class BilibiliDownloader {
                 this.saveSettings();
             });
         });
+        
+        // Keyword filter toggle
+        document.getElementById('keywordToggle').addEventListener('click', () => {
+            this.toggleKeywordFilter();
+        });
+        
+        // Keyword preset buttons
+        const keywordPresetButtons = document.querySelectorAll('.keyword-preset-btn');
+        keywordPresetButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                this.addKeywordToExclude(button.getAttribute('data-keyword'));
+            });
+        });
     }
     
+    // Toggle keyword filter section
+    toggleKeywordFilter() {
+        const content = document.getElementById('keywordContent');
+        const toggle = document.getElementById('keywordToggle');
+        const icon = toggle.querySelector('.toggle-icon');
+        
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            icon.style.transform = 'rotate(180deg)';
+            toggle.classList.add('expanded');
+        } else {
+            content.style.display = 'none';
+            icon.style.transform = 'rotate(0deg)';
+            toggle.classList.remove('expanded');
+        }
+    }
+    
+    // Add keyword to exclude list
+    addKeywordToExclude(keyword) {
+        const excludeInput = document.getElementById('excludeKeywords');
+        const currentKeywords = excludeInput.value.trim();
+        
+        if (currentKeywords) {
+            const keywords = currentKeywords.split(',').map(k => k.trim());
+            if (!keywords.includes(keyword)) {
+                excludeInput.value = currentKeywords + ',' + keyword;
+            }
+        } else {
+            excludeInput.value = keyword;
+        }
+        
+        // Trigger change event to save settings
+        excludeInput.dispatchEvent(new Event('change'));
+        this.setStatus(`已添加屏蔽词: ${keyword}`);
+    }
+
     // Save current filter as preset
     async saveFilterPreset() {
         const presetName = prompt('请输入预设名称:', '');

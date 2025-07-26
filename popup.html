@@ -180,11 +180,57 @@
                         </div>
                         
                         <!-- Content Keyword Filter -->
-                        <div class="filter-item">
-                            <label for="keywords">内容关键词:</label>
-                            <input type="text" id="keywords" placeholder="多个关键词用逗号分隔">
-                            <div class="filter-help">
-                                <p>包含任一关键词的动态将被保留，留空表示不过滤</p>
+                        <div class="filter-item keyword-filter">
+                            <div class="keyword-header" id="keywordToggle">
+                                <div class="header-content">
+                                    <svg class="header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span>内容关键词过滤</span>
+                                </div>
+                                <span class="toggle-icon">▼</span>
+                            </div>
+                            <div id="keywordContent" class="keyword-content" style="display: none;">
+                                <div class="keyword-section">
+                                    <div class="keyword-type">
+                                        <h4>包含关键词（保留动态）</h4>
+                                        <input type="text" id="includeKeywords" placeholder="多个关键词用逗号分隔">
+                                        <div class="filter-help">
+                                            <p>包含任一关键词的动态将被保留，留空表示不过滤</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="keyword-type">
+                                        <h4>屏蔽关键词（过滤动态）</h4>
+                                        <input type="text" id="excludeKeywords" placeholder="多个关键词用逗号分隔">
+                                        <div class="filter-help">
+                                            <p>包含任一关键词的动态将被屏蔽，留空表示不屏蔽</p>
+                                        </div>
+                                        
+                                        <div class="keyword-presets">
+                                            <h5>常用屏蔽词：</h5>
+                                            <div class="preset-keywords">
+                                                <button type="button" class="keyword-preset-btn" data-keyword="广告">广告</button>
+                                                <button type="button" class="keyword-preset-btn" data-keyword="营销">营销</button>
+                                                <button type="button" class="keyword-preset-btn" data-keyword="推广">推广</button>
+                                                <button type="button" class="keyword-preset-btn" data-keyword="代购">代购</button>
+                                                <button type="button" class="keyword-preset-btn" data-keyword="微商">微商</button>
+                                                <button type="button" class="keyword-preset-btn" data-keyword="刷量">刷量</button>
+                                                <button type="button" class="keyword-preset-btn" data-keyword="抽奖">抽奖</button>
+                                                <button type="button" class="keyword-preset-btn" data-keyword="福利">福利</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="keyword-options">
+                                        <label>
+                                            <input type="checkbox" id="caseSensitive"> 区分大小写
+                                        </label>
+                                        <label>
+                                            <input type="checkbox" id="exactMatch"> 精确匹配
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         

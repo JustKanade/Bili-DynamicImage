@@ -788,6 +788,12 @@ class BilibiliContentScript {
             const timeEl = card.querySelector('.bili-dyn-time');
             const timeText = timeEl ? timeEl.textContent.trim() : '';
 
+            // Apply keyword filters
+            if (!this.passesKeywordFilter(content, settings.filters)) {
+                console.log(`Dynamic filtered by keywords: ${dynamicId}`);
+                return null;
+            }
+
             return {
                 dynamicId,
                 userName,
@@ -800,6 +806,76 @@ class BilibiliContentScript {
             console.error('Failed to extract dynamic info:', error);
             return null;
         }
+    }
+
+    // Check if content passes keyword filters
+    passesKeywordFilter(content, filters) {
+        if (!filters) return true;
+        
+        const { includeKeywords, excludeKeywords, caseSensitive = false, exactMatch = false } = filters;
+        
+        // Prepare content for comparison
+        let checkContent = caseSensitive ? content : content.toLowerCase();
+        
+        // Check exclude keywords (if content contains any exclude keyword, filter it out)
+        if (excludeKeywords && excludeKeywords.trim()) {
+            const excludeList = excludeKeywords.split(',').map(k => k.trim()).filter(k => k);
+            for (const keyword of excludeList) {
+                const checkKeyword = caseSensitive ? keyword : keyword.toLowerCase();
+                
+                if (exactMatch) {
+                    // For exact match, use word boundaries
+                    const regex = new RegExp(`\\b${this.escapeRegExp(checkKeyword)}\\b`, caseSensitive ? 'g' : 'gi');
+                    if (regex.test(content)) {
+                        console.log(`Content blocked by exclude keyword: "${keyword}"`);
+                        return false;
+                    }
+                } else {
+                    // For partial match
+                    if (checkContent.includes(checkKeyword)) {
+                        console.log(`Content blocked by exclude keyword: "${keyword}"`);
+                        return false;
+                    }
+                }
+            }
+        }
+        
+        // Check include keywords (if specified, content must contain at least one)
+        if (includeKeywords && includeKeywords.trim()) {
+            const includeList = includeKeywords.split(',').map(k => k.trim()).filter(k => k);
+            let hasIncludeKeyword = false;
+            
+            for (const keyword of includeList) {
+                const checkKeyword = caseSensitive ? keyword : keyword.toLowerCase();
+                
+                if (exactMatch) {
+                    // For exact match, use word boundaries
+                    const regex = new RegExp(`\\b${this.escapeRegExp(checkKeyword)}\\b`, caseSensitive ? 'g' : 'gi');
+                    if (regex.test(content)) {
+                        hasIncludeKeyword = true;
+                        break;
+                    }
+                } else {
+                    // For partial match
+                    if (checkContent.includes(checkKeyword)) {
+                        hasIncludeKeyword = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!hasIncludeKeyword) {
+                console.log(`Content filtered: does not contain required keywords`);
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    // Escape special regex characters
+    escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     // Wait for element to appear
