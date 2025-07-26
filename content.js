@@ -468,7 +468,7 @@ class BilibiliContentScript {
         if (this.isDownloading) return;
 
         try {
-            // 检查扩展上下文是否有效
+            // Check if extension context is valid
             if (!chrome.runtime || !chrome.runtime.id) {
                 console.error('Extension context invalidated');
                 this.showSettingsNotification('扩展上下文已失效，请刷新页面');
@@ -487,15 +487,16 @@ class BilibiliContentScript {
                 this.updateDownloadStatus('未找到图片', false);
                 setTimeout(() => {
                     this.updateDownloadStatus('就绪', false);
+                    this.isDownloading = false;
                 }, 3000);
                 return;
             }
 
-            // 添加下载数量限制提示
+            // Add download count limit info
             const maxDownloads = settings.maxDownloads || 0;
             let statusText = `找到 ${dynamics.length} 条动态`;
             
-            // 如果应用了限制，且实际动态数量超过限制，显示提示
+            // If limit is applied and actual count exceeds limit, show hint
             if (maxDownloads > 0) {
                 const totalFound = document.querySelectorAll('.bili-dyn-list .bili-dyn-item').length;
                 if (totalFound > maxDownloads) {
@@ -512,6 +513,10 @@ class BilibiliContentScript {
                     dynamics: dynamics,
                     settings: settings
                 });
+                
+                // Don't reset isDownloading here - let the background script handle completion
+                console.log('Download task sent to background script from sidebar');
+                
             } catch (error) {
                 console.error('Failed to send message to background script:', error);
                 throw new Error('与扩展通信失败，请刷新页面后重试');
@@ -521,7 +526,6 @@ class BilibiliContentScript {
             console.error('Download failed:', error);
             this.updateDownloadStatus('下载失败', false);
             
-
             if (error.message.includes('Extension context invalidated') || 
                 error.message.includes('与扩展通信失败')) {
                 this.showSettingsNotification(error.message);
@@ -529,12 +533,8 @@ class BilibiliContentScript {
             
             setTimeout(() => {
                 this.updateDownloadStatus('就绪', false);
-            }, 3000);
-        } finally {
-            // Reset downloading state after a delay
-            setTimeout(() => {
                 this.isDownloading = false;
-            }, 1000);
+            }, 3000);
         }
     }
 
@@ -791,16 +791,27 @@ class BilibiliContentScript {
                     sendResponse({ success: true });
                     break;
                 case 'downloadComplete':
-                    // Update sidebar button status
+                    // Update sidebar button status and reset downloading state
                     const data = message.data;
                     if (data.stopped) {
                         this.updateDownloadStatus('已停止', false);
                     } else {
                         this.updateDownloadStatus(`完成! ${data.success} 成功`, false);
                     }
+                    // Reset downloading state immediately
+                    this.isDownloading = false;
                     setTimeout(() => {
                         this.updateDownloadStatus('就绪', false);
                     }, 5000);
+                    sendResponse({ success: true });
+                    break;
+                case 'downloadError':
+                    // Handle download error and reset state
+                    this.updateDownloadStatus('下载失败', false);
+                    this.isDownloading = false;
+                    setTimeout(() => {
+                        this.updateDownloadStatus('就绪', false);
+                    }, 3000);
                     sendResponse({ success: true });
                     break;
                 case 'openSettingsFromSidebar':

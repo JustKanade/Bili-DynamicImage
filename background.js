@@ -414,12 +414,18 @@ class BilibiliDownloadManager {
 
     // Send error message
     sendError(message) {
-        chrome.runtime.sendMessage({
+        const errorData = {
             type: 'downloadError',
             data: message
-        }).catch(() => {
+        };
+        
+        // Send to popup
+        chrome.runtime.sendMessage(errorData).catch(() => {
             // Ignore errors when popup is closed
         });
+        
+        // Send to content script (sidebar button)
+        this.sendToContentScript(errorData);
     }
 
     sleep(seconds) {
