@@ -1,8 +1,7 @@
 <p align="center">
-  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/icons/logo.png" alt="Bili-DynamicImage Logo" width="500px">
+  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/icons/icon128.png" alt="Bili-DynamicImage Logo" width="500px">
 </p>
 
-<h1 align="center">Bili-DynamicImage</h1>
 
 <p align="center">
   <a href="https://github.com/JustKanade/Bili-DynamicImage/blob/main/LICENSE">
