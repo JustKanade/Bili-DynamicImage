@@ -257,8 +257,20 @@ class BilibiliContentScript {
                     background-color: rgba(0, 135, 189, 0.1);
                 }
                 
+                /* Prevent text wrapping for main text */
                 .bili-download-item .side-nav__item__main-text {
                     color: #0087BD;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                
+                /* Prevent icon wrapping in sub container */
+                .bili-download-item .side-nav__item__sub {
+                    display: flex;
+                    align-items: center;
+                    flex-wrap: nowrap;
+                    gap: 4px;
                 }
                 
                 .bili-download-status {
@@ -266,6 +278,7 @@ class BilibiliContentScript {
                     display: inline-flex;
                     align-items: center;
                     transition: all 0.2s ease;
+                    flex-shrink: 0;
                 }
                 
                 .bili-download-status svg {
@@ -315,6 +328,7 @@ class BilibiliContentScript {
                     transition: all 0.2s ease;
                     border-radius: 3px;
                     padding: 2px;
+                    flex-shrink: 0;
                 }
                 
                 .bili-download-settings:hover {
