@@ -1079,7 +1079,7 @@ class BilibiliContentScript {
         }
 
         // Use settings with defaults
-        const scrollSpeed = settings.scrollSpeed || 500;
+        const scrollSpeed = settings.scrollSpeed || 1000;
         const scrollInterval = settings.scrollInterval || 1000;
         const smoothScroll = settings.smoothScroll !== false;
         const autoScrollToTop = settings.autoScrollToTop || false;

@@ -46,7 +46,7 @@ class BilibiliDownloader {
             },
             // Auto scroll settings
             autoScroll: {
-                scrollSpeed: 500,
+                scrollSpeed: 1000,
                 scrollInterval: 1000,
                 smoothScroll: true,
                 autoScrollToTop: false,
@@ -178,7 +178,7 @@ class BilibiliDownloader {
         
         // Update auto scroll settings
         const autoScroll = this.settings.autoScroll;
-        document.getElementById('scrollSpeed').value = autoScroll.scrollSpeed || 500;
+        document.getElementById('scrollSpeed').value = autoScroll.scrollSpeed || 1000;
         document.getElementById('scrollInterval').value = autoScroll.scrollInterval || 1000;
         document.getElementById('smoothScroll').checked = autoScroll.smoothScroll !== false;
         document.getElementById('autoScrollToTop').checked = autoScroll.autoScrollToTop || false;
@@ -467,7 +467,7 @@ class BilibiliDownloader {
         excludeInput.dispatchEvent(new Event('change'));
         this.setStatus(`已添加屏蔽词: ${keyword}`);
     }
-
+    
     // Save current filter as preset
     async saveFilterPreset() {
         const presetName = prompt('请输入预设名称:', '');
