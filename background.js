@@ -37,6 +37,15 @@ class BilibiliDownloadManager {
                     this.openPopupWithSettings();
                     sendResponse({ success: true });
                     break;
+                case 'getDownloadStatus':
+                    // Return current download status
+                    sendResponse({ 
+                        success: true, 
+                        isDownloading: this.isDownloading,
+                        downloadStats: this.downloadStats || null,
+                        downloadStopped: this.downloadStopped || false
+                    });
+                    break;
                 default:
                     sendResponse({ success: false, error: '未知消息类型' });
             }

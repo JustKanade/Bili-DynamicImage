@@ -14,6 +14,7 @@ class BilibiliDownloader {
         await this.checkCurrentPage();
         await this.checkAutoExpandSettings();
         await this.checkAutoScrollStatus();
+        await this.checkDownloadStatus();
         this.setupMessageListener();
     }
 
@@ -523,6 +524,11 @@ class BilibiliDownloader {
     handleMessage(message) {
         switch (message.type) {
             case 'progressUpdate':
+                // Ensure UI is in download state when receiving progress updates
+                if (!this.isDownloading) {
+                    this.isDownloading = true;
+                    this.showProgress();
+                }
                 this.updateProgress(message.data);
                 break;
             case 'downloadComplete':
@@ -800,6 +806,38 @@ class BilibiliDownloader {
             }
         } catch (error) {
             console.error('Failed to check auto scroll status:', error);
+            // Don't show error to user as this is just a status check
+        }
+    }
+
+    // Check current download status and sync UI
+    async checkDownloadStatus() {
+        try {
+            // Get download status from background script
+            const response = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({ type: 'getDownloadStatus' }, resolve);
+            });
+
+            if (response && response.success && response.isDownloading) {
+                // Download is in progress, sync UI
+                this.isDownloading = true;
+                this.showProgress();
+                
+                if (response.downloadStats) {
+                    // Update progress with current stats
+                    this.updateProgress({
+                        current: response.downloadStats.current,
+                        total: response.downloadStats.total,
+                        currentItem: '恢复中...',
+                        status: ''
+                    });
+                }
+                
+                this.setStatus('下载进行中...');
+                console.log('Synced with ongoing download from background script');
+            }
+        } catch (error) {
+            console.error('Failed to check download status:', error);
             // Don't show error to user as this is just a status check
         }
     }
