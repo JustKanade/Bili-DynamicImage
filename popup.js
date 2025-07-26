@@ -21,6 +21,7 @@ class BilibiliDownloader {
     // Load user settings
     async loadSettings() {
         const defaultSettings = {
+            theme: 'system',
             fileNamePattern: '{original}.{ext}',
             downloadPath: 'BiliDynamic',
             skipReference: true,
@@ -100,6 +101,7 @@ class BilibiliDownloader {
         }
 
         this.updateUI();
+        this.applyTheme();
     }
 
     // Save user settings
@@ -152,6 +154,7 @@ class BilibiliDownloader {
 
     // Update UI with current settings
     updateUI() {
+        document.getElementById('themeSelector').value = this.settings.theme || 'system';
         document.getElementById('fileNamePattern').value = this.settings.fileNamePattern;
         document.getElementById('downloadPath').value = this.settings.downloadPath || '';
         document.getElementById('skipReference').checked = this.settings.skipReference;
@@ -231,6 +234,12 @@ class BilibiliDownloader {
         });
 
         // Settings change handlers
+        document.getElementById('themeSelector').addEventListener('change', (e) => {
+            this.settings.theme = e.target.value;
+            this.saveSettings();
+            this.applyTheme();
+        });
+
         document.getElementById('fileNamePattern').addEventListener('change', (e) => {
             this.settings.fileNamePattern = e.target.value;
             this.saveSettings();
@@ -735,6 +744,21 @@ class BilibiliDownloader {
         this.setStatus('错误: ' + message);
         this.isDownloading = false;
         this.hideProgress();
+    }
+
+    // Apply theme to the popup
+    applyTheme() {
+        const theme = this.settings.theme || 'system';
+        const body = document.body;
+        
+        // Remove existing theme attributes
+        body.removeAttribute('data-theme');
+        
+        // Apply manual theme if not system
+        if (theme !== 'system') {
+            body.setAttribute('data-theme', theme);
+        }
+        // If theme is 'system', let CSS media query handle it
     }
 
     setStatus(text) {

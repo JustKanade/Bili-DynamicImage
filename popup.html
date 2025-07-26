@@ -10,6 +10,7 @@
 <body>
     <div class="container">
         <div class="header">
+            <img src="icons/icon128.png" alt="Bili-DynamicImage" class="header-icon">
             <h1>Bili-DynamicImage</h1>
         </div>
 
@@ -51,6 +52,15 @@
                     <span class="toggle-icon">▼</span>
                 </div>
                 <div id="settingsContent" class="settings-content" style="display: none;">
+                    <div class="setting-item">
+                        <label for="themeSelector">主题:</label>
+                        <select id="themeSelector">
+                            <option value="system">跟随系统</option>
+                            <option value="light">浅色主题</option>
+                            <option value="dark">深色主题</option>
+                        </select>
+                    </div>
+                    
                     <div class="setting-item">
                         <label for="fileNamePattern">命名规则:</label>
                         <input type="text" id="fileNamePattern" placeholder="{original}.{ext}">

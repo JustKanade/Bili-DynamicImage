@@ -19,9 +19,38 @@
     --shadow-color: rgba(0, 0, 0, 0.1);
 }
 
+/* Manual theme control - higher priority than media query */
+[data-theme="light"] {
+    --bg-color: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --text-color: #333;
+    --text-secondary: #666;
+    --border-color: #e9ecef;
+    --primary-color: #0087BD;
+    --primary-hover: #0078a8;
+    --primary-active: #006a94;
+    --danger-color: #dc3545;
+    --danger-hover: #c82333;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --bg-secondary: #2a2a2a;
+    --text-color: #e0e0e0;
+    --text-secondary: #aaaaaa;
+    --border-color: #3a3a3a;
+    --primary-color: #0095d2;
+    --primary-hover: #00a7e9;
+    --primary-active: #00b8ff;
+    --danger-color: #e74c3c;
+    --danger-hover: #f55a4a;
+    --shadow-color: rgba(0, 0, 0, 0.3);
+}
+
+/* System theme (default) - only applies when no manual theme is set */
 @media (prefers-color-scheme: dark) {
-    :root {
-        
+    body:not([data-theme]) {
         --bg-color: #1a1a1a;
         --bg-secondary: #2a2a2a;
         --text-color: #e0e0e0;
@@ -57,13 +86,23 @@ body {
     background: var(--primary-color);
     color: white;
     padding: 12px;
-    text-align: center;
-    border-radius: 0; 
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.header-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
 }
 
 .header h1 {
     font-size: 16px;
     font-weight: 500;
+    margin: 0;
 }
 
 
@@ -335,7 +374,8 @@ input:checked + .slider:before {
 }
 
 .setting-item input[type="text"],
-.setting-item input[type="number"] {
+.setting-item input[type="number"],
+.setting-item select {
     width: 100%;
     padding: 6px 8px;
     border: 1px solid var(--border-color);
@@ -346,7 +386,8 @@ input:checked + .slider:before {
 }
 
 .setting-item input[type="text"]:focus,
-.setting-item input[type="number"]:focus {
+.setting-item input[type="number"]:focus,
+.setting-item select:focus {
     outline: none;
     border-color: var(--primary-color);
 }
@@ -661,47 +702,134 @@ input:checked + .slider:before {
     margin: 0;
 }
 
-/* Dark mode for keyword filter */
+/* Manual theme controls for keyword filter */
+[data-theme="light"] .keyword-filter {
+    background: rgba(0, 135, 189, 0.04);
+    border-color: rgba(0, 135, 189, 0.2);
+}
+
+[data-theme="light"] .keyword-header {
+    background: linear-gradient(45deg, rgba(0, 135, 189, 0.08), rgba(0, 135, 189, 0.12));
+    border-bottom-color: rgba(0, 135, 189, 0.15);
+}
+
+[data-theme="light"] .keyword-header:hover {
+    background: linear-gradient(45deg, rgba(0, 135, 189, 0.12), rgba(0, 135, 189, 0.16));
+}
+
+[data-theme="light"] .keyword-header .header-icon {
+    color: #0087BD;
+}
+
+[data-theme="light"] .keyword-content {
+    background: var(--bg-color);
+}
+
+[data-theme="light"] .keyword-type {
+    background: var(--bg-secondary);
+    border-color: rgba(0, 135, 189, 0.15);
+}
+
+[data-theme="light"] .keyword-preset-btn {
+    background: rgba(0, 135, 189, 0.08);
+    border-color: rgba(0, 135, 189, 0.2);
+    color: #0087BD;
+}
+
+[data-theme="light"] .keyword-preset-btn:hover {
+    background: rgba(0, 135, 189, 0.15);
+    border-color: rgba(0, 135, 189, 0.3);
+}
+
+[data-theme="light"] .keyword-options {
+    background: rgba(0, 135, 189, 0.05);
+    border-color: rgba(0, 135, 189, 0.15);
+}
+
+[data-theme="dark"] .keyword-filter {
+    background: rgba(0, 181, 229, 0.03);
+    border-color: rgba(0, 181, 229, 0.2);
+}
+
+[data-theme="dark"] .keyword-header {
+    background: linear-gradient(45deg, rgba(0, 181, 229, 0.08), rgba(0, 181, 229, 0.12));
+    border-bottom-color: rgba(0, 181, 229, 0.15);
+}
+
+[data-theme="dark"] .keyword-header:hover {
+    background: linear-gradient(45deg, rgba(0, 181, 229, 0.12), rgba(0, 181, 229, 0.16));
+}
+
+[data-theme="dark"] .keyword-header .header-icon {
+    color: #00B5E5;
+}
+
+[data-theme="dark"] .keyword-content {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .keyword-type {
+    background: rgba(0, 0, 0, 0.3);
+    border-color: rgba(0, 181, 229, 0.12);
+}
+
+[data-theme="dark"] .keyword-preset-btn {
+    background: rgba(0, 181, 229, 0.15);
+    border-color: rgba(0, 181, 229, 0.25);
+    color: #00B5E5;
+}
+
+[data-theme="dark"] .keyword-preset-btn:hover {
+    background: rgba(0, 181, 229, 0.2);
+    border-color: rgba(0, 181, 229, 0.35);
+}
+
+[data-theme="dark"] .keyword-options {
+    background: rgba(0, 181, 229, 0.08);
+    border-color: rgba(0, 181, 229, 0.15);
+}
+
+/* System theme (default) - only applies when no manual theme is set */
 @media (prefers-color-scheme: dark) {
-    .keyword-filter {
+    body:not([data-theme]) .keyword-filter {
         background: rgba(0, 181, 229, 0.03);
         border-color: rgba(0, 181, 229, 0.2);
     }
     
-    .keyword-header {
+    body:not([data-theme]) .keyword-header {
         background: linear-gradient(45deg, rgba(0, 181, 229, 0.08), rgba(0, 181, 229, 0.12));
         border-bottom-color: rgba(0, 181, 229, 0.15);
     }
     
-    .keyword-header:hover {
+    body:not([data-theme]) .keyword-header:hover {
         background: linear-gradient(45deg, rgba(0, 181, 229, 0.12), rgba(0, 181, 229, 0.16));
     }
     
-    .keyword-header .header-icon {
+    body:not([data-theme]) .keyword-header .header-icon {
         color: #00B5E5;
     }
     
-    .keyword-content {
+    body:not([data-theme]) .keyword-content {
         background: rgba(0, 0, 0, 0.2);
     }
     
-    .keyword-type {
+    body:not([data-theme]) .keyword-type {
         background: rgba(0, 0, 0, 0.3);
         border-color: rgba(0, 181, 229, 0.12);
     }
     
-    .keyword-preset-btn {
+    body:not([data-theme]) .keyword-preset-btn {
         background: rgba(0, 181, 229, 0.15);
         border-color: rgba(0, 181, 229, 0.25);
         color: #00B5E5;
     }
     
-    .keyword-preset-btn:hover {
+    body:not([data-theme]) .keyword-preset-btn:hover {
         background: rgba(0, 181, 229, 0.2);
         border-color: rgba(0, 181, 229, 0.35);
     }
     
-    .keyword-options {
+    body:not([data-theme]) .keyword-options {
         background: rgba(0, 181, 229, 0.08);
         border-color: rgba(0, 181, 229, 0.15);
     }
@@ -746,7 +874,8 @@ input:checked + .slider:before {
     .date-range input,
     .range-filter input,
     #keywords,
-    #presetSelector {
+    #presetSelector,
+    #themeSelector {
         background-color: #333;
         color: #eee;
         border-color: #555;
