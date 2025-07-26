@@ -408,7 +408,11 @@ class BilibiliContentScript {
 
         // Add click event handler for download button
         downloadItem.querySelector('.side-nav__item__main').addEventListener('click', () => {
-            this.startDownloadFromSidebar();
+            if (this.isDownloading) {
+                this.stopDownloadFromSidebar();
+            } else {
+                this.startDownloadFromSidebar();
+            }
         });
 
         // Add click event handler for settings button
@@ -554,6 +558,9 @@ class BilibiliContentScript {
             statusEl.setAttribute('data-status', this.getStatusType(text, isDownloading));
         }
 
+        // Update main button text
+        this.updateDownloadButtonText(isDownloading);
+
         if (isDownloading) {
             this.downloadButton.classList.add('downloading');
         } else {
@@ -561,6 +568,38 @@ class BilibiliContentScript {
         }
     }
     
+    // Update main download button text
+    updateDownloadButtonText(isDownloading) {
+        if (!this.downloadButton || !document.body.contains(this.downloadButton)) return;
+
+        const textEl = this.downloadButton.querySelector('.side-nav__item__main-text');
+        if (textEl) {
+            textEl.textContent = isDownloading ? '暂停' : '下载图片';
+                }
+    }
+    
+    // Stop download process from sidebar button
+    stopDownloadFromSidebar() {
+        if (!this.isDownloading) return;
+
+        try {
+            // Send stop message to background script
+            chrome.runtime.sendMessage({ type: 'stopDownload' });
+            
+            this.updateDownloadStatus('正在停止...', false);
+            this.isDownloading = false;
+            
+            console.log('Stop download requested from sidebar');
+            
+        } catch (error) {
+            console.error('Failed to stop download:', error);
+            this.updateDownloadStatus('停止失败', false);
+            setTimeout(() => {
+                this.updateDownloadStatus('就绪', false);
+            }, 3000);
+        }
+    }
+
     // Get appropriate icon for status
     getStatusIcon(text, isDownloading) {
         if (isDownloading || text.includes('扫描') || text.includes('下载中')) {
