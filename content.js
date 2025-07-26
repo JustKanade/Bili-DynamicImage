@@ -554,11 +554,8 @@ class BilibiliContentScript {
             // Show image selector
             this.showImageSelector(dynamicInfo, dynamicCard);
             
-            // Close the menu
-            const menu = menuItem.closest('.bili-cascader-options, .bili-dropdown-options');
-            if (menu) {
-                menu.style.display = 'none';
-            }
+            // Close the menu by simulating a click outside (more gentle approach)
+            this.closeMenuGently();
         } catch (error) {
             console.error('Failed to handle menu download click:', error);
             this.showNotification('下载失败: ' + error.message, 'error');
@@ -1052,6 +1049,24 @@ class BilibiliContentScript {
         `;
 
         document.head.appendChild(style);
+    }
+
+    // Close menu gently without breaking native menu system
+    closeMenuGently() {
+        try {
+            // Method 1: Simulate clicking outside the menu area
+            setTimeout(() => {
+                // Create a synthetic click event on document body
+                const clickEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window
+                });
+                document.body.dispatchEvent(clickEvent);
+            }, 100);
+        } catch (error) {
+            console.error('Failed to close menu gently:', error);
+        }
     }
 
     // Show notification
