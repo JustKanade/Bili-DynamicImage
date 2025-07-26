@@ -1,15 +1,13 @@
 <p align="center">
-  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/icons/icon128.png" alt="Bili-DynamicImage Logo" width="500px">
+  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/icons/icon128.png" alt="Bili-DynamicImage Logo" width="200px" style="border-radius:20px;">
 </p>
 
 
 <p align="center">
-  <a href="https://github.com/JustKanade/Bili-DynamicImage/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/JustKanade/Bili-DynamicImage" alt="License">
-  </a>
-  <!-- Version is dynamically updated from manifest.json -->
+
+
   <img src="https://img.shields.io/github/manifest-json/v/JustKanade/Bili-DynamicImage" alt="Version">
-  <!-- This badge shows total downloads from GitHub Releases -->
+
   <a href="https://github.com/JustKanade/Bili-DynamicImage/releases">
     <img src="https://img.shields.io/github/downloads/JustKanade/Bili-DynamicImage/total" alt="GitHub Release Downloads">
   </a>
