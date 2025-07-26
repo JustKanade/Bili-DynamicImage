@@ -257,7 +257,6 @@ class BilibiliContentScript {
                     background-color: rgba(0, 135, 189, 0.25);
                     border-left: 3px solid #0087BD;
                     box-shadow: 0 0 8px rgba(0, 135, 189, 0.3);
-                    animation: downloadingPulse 2s ease-in-out infinite;
                 }
                 
                 /* Prevent text wrapping for main text */
@@ -322,21 +321,6 @@ class BilibiliContentScript {
                     to { transform: rotate(360deg); }
                 }
                 
-                @keyframes downloadingPulse {
-                    0% { 
-                        box-shadow: 0 0 8px rgba(0, 135, 189, 0.3);
-                        border-left-color: #0087BD;
-                    }
-                    50% { 
-                        box-shadow: 0 0 12px rgba(0, 135, 189, 0.5);
-                        border-left-color: #00a1d6;
-                    }
-                    100% { 
-                        box-shadow: 0 0 8px rgba(0, 135, 189, 0.3);
-                        border-left-color: #0087BD;
-                    }
-                }
-                
                 .bili-download-settings {
                     color: #0087BD;
                     margin-right: 8px;
@@ -372,7 +356,6 @@ class BilibiliContentScript {
                         background-color: rgba(0, 149, 210, 0.35);
                         border-left: 3px solid #0095d2;
                         box-shadow: 0 0 8px rgba(0, 149, 210, 0.4);
-                        animation: downloadingPulseDark 2s ease-in-out infinite;
                     }
                     
                     .bili-download-item .side-nav__item__main-text {
@@ -418,21 +401,6 @@ class BilibiliContentScript {
                     
                     .bili-download-status[data-status="ready"] {
                         color: #aaa;
-                    }
-                    
-                    @keyframes downloadingPulseDark {
-                        0% { 
-                            box-shadow: 0 0 8px rgba(0, 149, 210, 0.4);
-                            border-left-color: #0095d2;
-                        }
-                        50% { 
-                            box-shadow: 0 0 12px rgba(0, 149, 210, 0.6);
-                            border-left-color: #00b5e5;
-                        }
-                        100% { 
-                            box-shadow: 0 0 8px rgba(0, 149, 210, 0.4);
-                            border-left-color: #0095d2;
-                        }
                     }
                 }
             `;
