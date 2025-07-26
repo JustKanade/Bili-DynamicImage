@@ -3,14 +3,18 @@ class BilibiliDownloader {
         this.isDownloading = false;
         this.downloadStopped = false;
         this.settings = {};
+        this.filterPresets = [];
         this.init();
     }
 
     async init() {
         await this.loadSettings();
+        await this.loadFilterPresets();
         this.bindEvents();
         await this.checkCurrentPage();
         await this.checkAutoExpandSettings();
+        await this.checkAutoScrollStatus();
+        this.setupMessageListener();
     }
 
     // Load user settings
@@ -22,12 +26,44 @@ class BilibiliDownloader {
             skipDownloaded: true,
             downloadInterval: 2,
             retryLimit: 3,
-            maxDownloads: 100
+            maxDownloads: 100,
+            // Filter settings
+            filters: {
+                startDate: '',
+                endDate: '',
+                keywords: '',
+                minImageCount: '',
+                maxImageCount: '',
+                dynamicTypes: {
+                    normal: true,
+                    repost: true,
+                    video: true,
+                    article: true
+                }
+            },
+            // Auto scroll settings
+            autoScroll: {
+                scrollSpeed: 500,
+                scrollInterval: 1000,
+                smoothScroll: true,
+                autoScrollToTop: false,
+                scrollDuration: 0
+            }
         };
 
         try {
             const result = await chrome.storage.local.get('bilibiliDownloaderSettings');
             this.settings = { ...defaultSettings, ...result.bilibiliDownloaderSettings };
+            
+            // Ensure filters object exists
+            if (!this.settings.filters) {
+                this.settings.filters = defaultSettings.filters;
+            }
+            
+            // Ensure dynamicTypes exists
+            if (!this.settings.filters.dynamicTypes) {
+                this.settings.filters.dynamicTypes = defaultSettings.filters.dynamicTypes;
+            }
         } catch (error) {
             console.error('Failed to load settings:', error);
             this.settings = defaultSettings;
@@ -45,6 +81,45 @@ class BilibiliDownloader {
         }
     }
 
+    // Load filter presets
+    async loadFilterPresets() {
+        try {
+            const result = await chrome.storage.local.get('bilibiliFilterPresets');
+            this.filterPresets = result.bilibiliFilterPresets || [];
+            this.updatePresetSelector();
+        } catch (error) {
+            console.error('Failed to load filter presets:', error);
+            this.filterPresets = [];
+        }
+    }
+
+    // Save filter presets
+    async saveFilterPresets() {
+        try {
+            await chrome.storage.local.set({ bilibiliFilterPresets: this.filterPresets });
+            this.updatePresetSelector();
+        } catch (error) {
+            console.error('Failed to save filter presets:', error);
+        }
+    }
+
+    // Update preset selector dropdown
+    updatePresetSelector() {
+        const selector = document.getElementById('presetSelector');
+        // Clear existing options except the first one
+        while (selector.options.length > 1) {
+            selector.remove(1);
+        }
+        
+        // Add presets to selector
+        this.filterPresets.forEach((preset, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = preset.name;
+            selector.appendChild(option);
+        });
+    }
+
     // Update UI with current settings
     updateUI() {
         document.getElementById('fileNamePattern').value = this.settings.fileNamePattern;
@@ -54,6 +129,28 @@ class BilibiliDownloader {
         document.getElementById('downloadInterval').value = this.settings.downloadInterval;
         document.getElementById('retryLimit').value = this.settings.retryLimit;
         document.getElementById('maxDownloads').value = this.settings.maxDownloads;
+        
+        // Update filter settings
+        const filters = this.settings.filters;
+        document.getElementById('startDate').value = filters.startDate || '';
+        document.getElementById('endDate').value = filters.endDate || '';
+        document.getElementById('keywords').value = filters.keywords || '';
+        document.getElementById('minImageCount').value = filters.minImageCount || '';
+        document.getElementById('maxImageCount').value = filters.maxImageCount || '';
+        
+        // Update dynamic type checkboxes
+        document.getElementById('typeNormal').checked = filters.dynamicTypes.normal;
+        document.getElementById('typeRepost').checked = filters.dynamicTypes.repost;
+        document.getElementById('typeVideo').checked = filters.dynamicTypes.video;
+        document.getElementById('typeArticle').checked = filters.dynamicTypes.article;
+        
+        // Update auto scroll settings
+        const autoScroll = this.settings.autoScroll;
+        document.getElementById('scrollSpeed').value = autoScroll.scrollSpeed || 500;
+        document.getElementById('scrollInterval').value = autoScroll.scrollInterval || 1000;
+        document.getElementById('smoothScroll').checked = autoScroll.smoothScroll !== false;
+        document.getElementById('autoScrollToTop').checked = autoScroll.autoScrollToTop || false;
+        document.getElementById('scrollDuration').value = autoScroll.scrollDuration || 0;
     }
 
     // Bind event handlers
@@ -66,8 +163,31 @@ class BilibiliDownloader {
             this.stopDownload();
         });
 
+        document.getElementById('autoScrollSwitch').addEventListener('change', async (e) => {
+            if (e.target.checked) {
+                this.startAutoScroll();
+            } else {
+                this.stopAutoScroll();
+            }
+        });
+
         document.getElementById('settingsToggle').addEventListener('click', () => {
             this.toggleSettings();
+        });
+        
+        // Filter toggle
+        document.getElementById('filterToggle').addEventListener('click', () => {
+            this.toggleFilter();
+        });
+        
+        // Auto scroll settings toggle
+        document.getElementById('autoScrollSettingsToggle').addEventListener('click', () => {
+            this.toggleAutoScrollSettings();
+        });
+        
+        // Auto scroll settings button
+        document.getElementById('autoScrollSettings').addEventListener('click', () => {
+            this.openAutoScrollSettings();
         });
 
         // GitHub link handler
@@ -83,22 +203,13 @@ class BilibiliDownloader {
         });
 
         document.getElementById('downloadPath').addEventListener('change', (e) => {
-
             let path = e.target.value.trim();
-            
-
             path = path.replace(/\\/g, '/');
-            
-
             if (path.startsWith('/')) {
                 path = path.substring(1);
             }
-            
-
             path = path.replace(/[<>:"|?*]/g, '_');
-            
             this.settings.downloadPath = path;
-            e.target.value = path; 
             this.saveSettings();
         });
 
@@ -113,90 +224,229 @@ class BilibiliDownloader {
         });
 
         document.getElementById('downloadInterval').addEventListener('change', (e) => {
-            this.settings.downloadInterval = parseInt(e.target.value);
+            let value = parseInt(e.target.value);
+            if (isNaN(value) || value < 1) value = 1;
+            if (value > 10) value = 10;
+            this.settings.downloadInterval = value;
+            e.target.value = value;
             this.saveSettings();
         });
 
         document.getElementById('retryLimit').addEventListener('change', (e) => {
-            this.settings.retryLimit = parseInt(e.target.value);
+            let value = parseInt(e.target.value);
+            if (isNaN(value) || value < 0) value = 0;
+            if (value > 10) value = 10;
+            this.settings.retryLimit = value;
+            e.target.value = value;
             this.saveSettings();
         });
 
         document.getElementById('maxDownloads').addEventListener('change', (e) => {
             let value = parseInt(e.target.value);
-            
-
-            if (isNaN(value) || value < 0) {
-                value = 100; 
-            } else if (value > 1000) {
-                value = 1000; 
-            }
-            
+            if (isNaN(value) || value < 0) value = 0;
+            if (value > 1000) value = 1000;
             this.settings.maxDownloads = value;
             e.target.value = value;
             this.saveSettings();
         });
-
         
+        // Filter settings event handlers
+        document.getElementById('startDate').addEventListener('change', (e) => {
+            this.settings.filters.startDate = e.target.value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('endDate').addEventListener('change', (e) => {
+            this.settings.filters.endDate = e.target.value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('keywords').addEventListener('change', (e) => {
+            this.settings.filters.keywords = e.target.value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('minImageCount').addEventListener('change', (e) => {
+            let value = e.target.value ? parseInt(e.target.value) : '';
+            this.settings.filters.minImageCount = value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('maxImageCount').addEventListener('change', (e) => {
+            let value = e.target.value ? parseInt(e.target.value) : '';
+            this.settings.filters.maxImageCount = value;
+            this.saveSettings();
+        });
+        
+        // Dynamic type checkbox handlers
+        document.getElementById('typeNormal').addEventListener('change', (e) => {
+            this.settings.filters.dynamicTypes.normal = e.target.checked;
+            this.saveSettings();
+        });
+        
+        document.getElementById('typeRepost').addEventListener('change', (e) => {
+            this.settings.filters.dynamicTypes.repost = e.target.checked;
+            this.saveSettings();
+        });
+        
+        document.getElementById('typeVideo').addEventListener('change', (e) => {
+            this.settings.filters.dynamicTypes.video = e.target.checked;
+            this.saveSettings();
+        });
+        
+        document.getElementById('typeArticle').addEventListener('change', (e) => {
+            this.settings.filters.dynamicTypes.article = e.target.checked;
+            this.saveSettings();
+        });
+        
+        // Auto scroll settings event handlers
+        document.getElementById('scrollSpeed').addEventListener('change', (e) => {
+            let value = parseInt(e.target.value);
+            if (isNaN(value) || value < 100) value = 100;
+            if (value > 2000) value = 2000;
+            this.settings.autoScroll.scrollSpeed = value;
+            e.target.value = value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('scrollInterval').addEventListener('change', (e) => {
+            let value = parseInt(e.target.value);
+            if (isNaN(value) || value < 500) value = 500;
+            if (value > 5000) value = 5000;
+            this.settings.autoScroll.scrollInterval = value;
+            e.target.value = value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('smoothScroll').addEventListener('change', (e) => {
+            this.settings.autoScroll.smoothScroll = e.target.checked;
+            this.saveSettings();
+        });
+        
+        document.getElementById('autoScrollToTop').addEventListener('change', (e) => {
+            this.settings.autoScroll.autoScrollToTop = e.target.checked;
+            this.saveSettings();
+        });
+        
+        document.getElementById('scrollDuration').addEventListener('change', (e) => {
+            let value = parseInt(e.target.value);
+            if (isNaN(value) || value < 0) value = 0;
+            if (value > 3600) value = 3600;
+            this.settings.autoScroll.scrollDuration = value;
+            e.target.value = value;
+            this.saveSettings();
+        });
+        
+        // Filter preset handlers
+        document.getElementById('savePresetBtn').addEventListener('click', () => {
+            this.saveFilterPreset();
+        });
+        
+        document.getElementById('deletePresetBtn').addEventListener('click', () => {
+            this.deleteFilterPreset();
+        });
+        
+        document.getElementById('presetSelector').addEventListener('change', (e) => {
+            this.loadFilterPreset(e.target.value);
+        });
+        
+        // Format buttons
         const formatButtons = document.querySelectorAll('.format-btn');
         formatButtons.forEach(button => {
             button.addEventListener('click', () => {
-                const format = button.getAttribute('data-format');
-                if (format) {
-                    const fileNameInput = document.getElementById('fileNamePattern');
-                    fileNameInput.value = format;
-
-                    this.settings.fileNamePattern = format;
-                    this.saveSettings();
-                }
+                document.getElementById('fileNamePattern').value = button.getAttribute('data-format');
+                this.settings.fileNamePattern = button.getAttribute('data-format');
+                this.saveSettings();
             });
         });
+    }
+    
+    // Save current filter as preset
+    async saveFilterPreset() {
+        const presetName = prompt('请输入预设名称:', '');
+        if (!presetName) return;
+        
+        const newPreset = {
+            name: presetName,
+            filters: JSON.parse(JSON.stringify(this.settings.filters))
+        };
+        
+        this.filterPresets.push(newPreset);
+        await this.saveFilterPresets();
+        this.setStatus('已保存过滤预设');
+    }
+    
+    // Delete selected preset
+    async deleteFilterPreset() {
+        const selector = document.getElementById('presetSelector');
+        const index = parseInt(selector.value);
+        
+        if (isNaN(index) || index < 0) return;
+        
+        if (confirm(`确定要删除预设 "${this.filterPresets[index].name}" 吗？`)) {
+            this.filterPresets.splice(index, 1);
+            await this.saveFilterPresets();
+            this.setStatus('已删除过滤预设');
+        }
+    }
+    
+    // Load selected preset
+    loadFilterPreset(indexStr) {
+        const index = parseInt(indexStr);
+        
+        if (isNaN(index) || index < 0 || index >= this.filterPresets.length) return;
+        
+        const preset = this.filterPresets[index];
+        this.settings.filters = JSON.parse(JSON.stringify(preset.filters));
+        this.saveSettings();
+        this.updateUI();
+        this.setStatus(`已加载预设: ${preset.name}`);
+    }
 
-        // Listen for background script messages
+    // Setup message listener for runtime messages
+    setupMessageListener() {
+        // Listen for messages from content script or background script
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             this.handleMessage(message);
+            return true; // Keep the message channel open for async responses
         });
     }
 
-    // Handle messages from background script and content script
+    // Handle messages from background script
     handleMessage(message) {
         switch (message.type) {
-            case 'downloadProgress':
+            case 'progressUpdate':
                 this.updateProgress(message.data);
                 break;
             case 'downloadComplete':
                 this.downloadComplete(message.data);
                 break;
             case 'downloadError':
-                this.showError(message.data);
+                this.showError(message.error);
+                this.hideProgress();
+                this.isDownloading = false;
                 break;
-            case 'openSettings':
-                // Open settings popup when clicked from sidebar
-                this.openPopupSettings();
+            case 'scrollStatus':
+                this.handleScrollStatus(message.data);
                 break;
         }
     }
 
-    // Open settings panel from sidebar button
+    // Open popup settings
     openPopupSettings() {
         const settingsContent = document.getElementById('settingsContent');
-        const settingsToggle = document.getElementById('settingsToggle');
-        
-        // Show settings if hidden
         if (settingsContent.style.display === 'none') {
-            settingsContent.style.display = 'block';
-            settingsToggle.classList.add('expanded');
+            this.toggleSettings(true);
         }
     }
 
-    // Check current page compatibility
+    // Check if we're on a supported page
     async checkCurrentPage() {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            const url = tab.url;
             
-            if (url.includes('t.bilibili.com') || url.includes('space.bilibili.com')) {
-                this.setStatus('当前页面支持下载');
+            if (tab.url.includes('t.bilibili.com') || tab.url.includes('space.bilibili.com')) {
+                this.setStatus('就绪');
                 document.getElementById('downloadBtn').disabled = false;
             } else {
                 this.setStatus('请打开B站动态页面');
@@ -205,6 +455,20 @@ class BilibiliDownloader {
         } catch (error) {
             console.error('Failed to check page:', error);
             this.setStatus('无法检测当前页面');
+        }
+    }
+    
+    // Toggle filter section visibility
+    toggleFilter(forceExpand = false) {
+        const filterContent = document.getElementById('filterContent');
+        const toggleIcon = document.querySelector('#filterToggle .toggle-icon');
+        
+        if (filterContent.style.display === 'none' || forceExpand) {
+            filterContent.style.display = 'block';
+            toggleIcon.textContent = '▲';
+        } else {
+            filterContent.style.display = 'none';
+            toggleIcon.textContent = '▼';
         }
     }
 
@@ -396,6 +660,131 @@ class BilibiliDownloader {
         } catch (error) {
             console.error('Failed to check auto-expand settings:', error);
         }
+    }
+
+    // Check current auto scroll status and sync UI
+    async checkAutoScrollStatus() {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            
+            if (tab.url.includes('t.bilibili.com') || tab.url.includes('space.bilibili.com')) {
+                // Check if auto scroll is currently running
+                const response = await this.sendMessageWithTimeout(tab.id, {
+                    type: 'getAutoScrollStatus'
+                }, 3000);
+
+                if (response && response.success && response.isScrolling) {
+                    // Auto scroll is running, sync UI
+                    document.getElementById('autoScrollSwitch').checked = true;
+                    document.getElementById('downloadBtn').disabled = true;
+                    
+                    let statusText = '正在自动滚动...';
+                    if (response.remainingTime !== null && response.remainingTime !== undefined) {
+                        const minutes = Math.floor(response.remainingTime / 60);
+                        const seconds = Math.floor(response.remainingTime % 60);
+                        if (minutes > 0) {
+                            statusText += ` (剩余 ${minutes}:${seconds.toString().padStart(2, '0')})`;
+                        } else {
+                            statusText += ` (剩余 ${seconds}秒)`;
+                        }
+                    }
+                    this.setStatus(statusText);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to check auto scroll status:', error);
+            // Don't show error to user as this is just a status check
+        }
+    }
+
+    // Start autoscroll
+    async startAutoScroll() {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            chrome.tabs.sendMessage(tab.id, { 
+                type: 'startAutoScroll', 
+                settings: this.settings.autoScroll 
+            });
+            this.setStatus('自动滚动已开始...');
+            document.getElementById('downloadBtn').disabled = true;
+        } catch (error) {
+            console.error('Failed to start autoscroll:', error);
+            this.showError('无法开始自动滚动');
+        }
+    }
+
+    // Stop autoscroll
+    async stopAutoScroll() {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            chrome.tabs.sendMessage(tab.id, { type: 'stopAutoScroll' });
+            this.setStatus('自动滚动已停止');
+            document.getElementById('downloadBtn').disabled = false;
+        } catch (error) {
+            console.error('Failed to stop autoscroll:', error);
+            this.showError('无法停止自动滚动');
+        }
+    }
+
+    handleScrollStatus(data) {
+        if (data.status === 'finished') {
+            this.setStatus('自动滚动完成');
+            document.getElementById('downloadBtn').disabled = false;
+            document.getElementById('autoScrollSwitch').checked = false; // Turn off the switch
+        } else if (data.status === 'duration_finished') {
+            this.setStatus('自动滚动已达到设定时间');
+            document.getElementById('downloadBtn').disabled = false;
+            document.getElementById('autoScrollSwitch').checked = false; // Turn off the switch
+        } else if (data.status === 'scrolling') {
+            let statusText = '正在自动滚动...';
+            if (data.remainingTime !== null && data.remainingTime !== undefined) {
+                const minutes = Math.floor(data.remainingTime / 60);
+                const seconds = Math.floor(data.remainingTime % 60);
+                if (minutes > 0) {
+                    statusText += ` (剩余 ${minutes}:${seconds.toString().padStart(2, '0')})`;
+                } else {
+                    statusText += ` (剩余 ${seconds}秒)`;
+                }
+            }
+            this.setStatus(statusText);
+        } else if (data.status === 'interrupted') {
+            this.setStatus('自动滚动已中断');
+            document.getElementById('downloadBtn').disabled = false;
+            document.getElementById('autoScrollSwitch').checked = false; // Turn off the switch
+        } else if (data.status === 'stopped') {
+            this.setStatus('自动滚动已停止');
+            document.getElementById('downloadBtn').disabled = false;
+            document.getElementById('autoScrollSwitch').checked = false; // Turn off the switch
+        }
+    }
+    
+    // Toggle auto scroll settings visibility
+    toggleAutoScrollSettings(forceExpand = false) {
+        const settingsContent = document.getElementById('autoScrollSettingsContent');
+        const toggleIcon = document.querySelector('#autoScrollSettingsToggle .toggle-icon');
+        
+        if (settingsContent.style.display === 'none' || forceExpand) {
+            settingsContent.style.display = 'block';
+            toggleIcon.textContent = '▲';
+        } else {
+            settingsContent.style.display = 'none';
+            toggleIcon.textContent = '▼';
+        }
+    }
+    
+    // Open auto scroll settings
+    openAutoScrollSettings() {
+        // Open main settings first
+        this.toggleSettings(true);
+        // Then open auto scroll settings
+        setTimeout(() => {
+            this.toggleAutoScrollSettings(true);
+            // Scroll to auto scroll settings
+            const autoScrollSettings = document.getElementById('autoScrollSettingsContent');
+            if (autoScrollSettings) {
+                autoScrollSettings.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }, 100);
     }
 }
 

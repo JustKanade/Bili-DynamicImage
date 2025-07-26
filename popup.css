@@ -72,20 +72,155 @@ body {
 }
 
 .download-btn {
-    width: 100%;
-    background: var(--primary-color);
-    color: white;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    background-color: #00a1d6;
     border: none;
-    padding: 12px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 500;
+    border-radius: 8px;
     cursor: pointer;
-    transition: background 0.2s ease;
+    transition: background-color 0.3s, transform 0.1s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.main-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: center;
+}
+
+.autoscroll-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.autoscroll-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.autoscroll-switch label {
+    font-size: 14px;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+/* The switch - the box around the slider */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 24px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* The slider */
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .slider {
+    background-color: #0087BD;
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px #0087BD;
+}
+
+input:checked + .slider:before {
+    transform: translateX(16px);
+}
+
+/* Rounded sliders */
+.slider.round {
+    border-radius: 24px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+.autoscroll-settings-btn {
+    background: none;
+    border: none;
+    border-radius: 4px;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+}
+
+.autoscroll-settings-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--primary-color);
+    opacity: 1;
+}
+
+.autoscroll-settings-btn svg {
+    transition: transform 0.2s ease;
+}
+
+.autoscroll-settings-btn:hover svg {
+    transform: rotate(90deg);
+}
+
+.autoscroll-settings-header {
+    margin-top: 16px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+}
+
+.autoscroll-settings-content {
+    background: rgba(0, 135, 189, 0.02);
+    border-radius: 6px;
+    padding: 8px;
+    margin-top: 8px;
+}
+
+/* Dark mode support for autoscroll components */
+@media (prefers-color-scheme: dark) {
+    .autoscroll-settings-content {
+        background: rgba(0, 181, 229, 0.02);
+    }
 }
 
 .download-btn:hover {
-    background: var(--primary-hover);
+    background-color: #00b5e5;
 }
 
 .download-btn:active {
@@ -330,4 +465,115 @@ body {
 
 .downloading {
     opacity: 0.8;
+} 
+
+/* Filter Styles */
+.filter-header {
+    margin-top: 20px;
+}
+
+.filter-content {
+    padding: 0 10px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.filter-item {
+    margin: 12px 0;
+    font-size: 14px;
+}
+
+.filter-item label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.date-range, .range-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.date-range input, 
+.range-filter input {
+    flex: 1;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.date-range span, 
+.range-filter span {
+    color: #666;
+}
+
+.filter-help {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #666;
+}
+
+.type-checkboxes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.type-checkboxes label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: normal;
+    margin-bottom: 0;
+}
+
+.preset-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+#presetSelector {
+    flex: 1;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.small-btn {
+    padding: 5px 8px;
+    font-size: 12px;
+    background-color: #00aeec;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.small-btn:hover {
+    background-color: #0096cc;
+}
+
+#keywords {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* 深色模式适配 */
+@media (prefers-color-scheme: dark) {
+    .date-range input,
+    .range-filter input,
+    #keywords,
+    #presetSelector {
+        background-color: #333;
+        color: #eee;
+        border-color: #555;
+    }
+    
+    .filter-help, .date-range span, .range-filter span {
+        color: #aaa;
+    }
 } 

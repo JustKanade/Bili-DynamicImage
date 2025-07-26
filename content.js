@@ -6,6 +6,8 @@ class BilibiliContentScript {
         this.isDownloading = false;
         this.currentUrl = window.location.href;
         this.observer = null;
+        this.scrollAnimationId = null; // For autoscroll
+        this.isScrolling = false;
         this.init();
     }
 
@@ -536,6 +538,29 @@ class BilibiliContentScript {
                     const dynamics = await this.extractDynamics(message.settings);
                     sendResponse({ success: true, dynamics });
                     break;
+                case 'startAutoScroll':
+                    this.startAutoScroll(message.settings);
+                    sendResponse({ success: true });
+                    break;
+                case 'stopAutoScroll':
+                    this.stopAutoScroll();
+                    sendResponse({ success: true });
+                    break;
+                case 'getAutoScrollStatus':
+                    const currentTime = performance.now();
+                    const totalElapsedTime = this.scrollStartTime ? (currentTime - this.scrollStartTime) / 1000 : 0;
+                    const remainingTime = this.autoScrollSettings && this.autoScrollSettings.scrollDuration > 0 
+                        ? Math.max(0, this.autoScrollSettings.scrollDuration - totalElapsedTime)
+                        : null;
+                    
+                    sendResponse({ 
+                        success: true, 
+                        isScrolling: this.isScrolling,
+                        settings: this.autoScrollSettings || null,
+                        remainingTime: remainingTime,
+                        totalElapsedTime: totalElapsedTime
+                    });
+                    break;
                 case 'markAsDownloaded':
                     await this.saveDownloadedId(message.dynamicId);
                     sendResponse({ success: true });
@@ -804,6 +829,173 @@ class BilibiliContentScript {
                 reject(new Error(`Element timeout: ${selector}`));
             }, timeout);
         });
+    }
+
+    // Start autoscrolling the page
+    startAutoScroll(settings = {}) {
+        if (this.scrollAnimationId) {
+            cancelAnimationFrame(this.scrollAnimationId);
+        }
+
+        // Use settings with defaults
+        const scrollSpeed = settings.scrollSpeed || 500;
+        const scrollInterval = settings.scrollInterval || 1000;
+        const smoothScroll = settings.smoothScroll !== false;
+        const autoScrollToTop = settings.autoScrollToTop || false;
+        const scrollDuration = settings.scrollDuration || 0; // 0 means unlimited
+
+        // Store settings for later use
+        this.autoScrollSettings = { scrollSpeed, scrollInterval, smoothScroll, autoScrollToTop, scrollDuration };
+
+        // Initialize animation variables
+        this.scrollStartTime = performance.now();
+        this.lastScrollTime = this.scrollStartTime;
+        this.lastScrollPosition = window.scrollY;
+        this.targetScrollPosition = window.scrollY + scrollSpeed;
+        this.isScrolling = true;
+
+        // Easing function for smooth animation (easeOutCubic)
+        this.easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+        // Start the animation loop
+        this.scrollAnimationStep();
+    }
+
+    // Animation step function using requestAnimationFrame
+    scrollAnimationStep() {
+        if (!this.isScrolling) return;
+
+        const currentTime = performance.now();
+        const timeSinceLastScroll = currentTime - this.lastScrollTime;
+        const totalElapsedTime = (currentTime - this.scrollStartTime) / 1000; // Convert to seconds
+
+        // Check if duration limit is reached
+        if (this.autoScrollSettings.scrollDuration > 0 && totalElapsedTime >= this.autoScrollSettings.scrollDuration) {
+            this.stopAutoScroll();
+            
+            // Scroll to top if requested
+            if (this.autoScrollSettings.autoScrollToTop) {
+                this.smoothScrollTo(0, 1000).then(() => {
+                    chrome.runtime.sendMessage({ type: 'scrollStatus', data: { status: 'duration_finished' } });
+                });
+            } else {
+                chrome.runtime.sendMessage({ type: 'scrollStatus', data: { status: 'duration_finished' } });
+            }
+            return;
+        }
+
+        // Check if enough time has passed for the next scroll step
+        if (timeSinceLastScroll >= this.autoScrollSettings.scrollInterval) {
+            // Check if we are at the bottom of the page
+            const isAtBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 10;
+            
+            if (isAtBottom) {
+                this.stopAutoScroll();
+                
+                // Scroll to top if requested
+                if (this.autoScrollSettings.autoScrollToTop) {
+                    this.smoothScrollTo(0, 1000).then(() => {
+                        chrome.runtime.sendMessage({ type: 'scrollStatus', data: { status: 'finished' } });
+                    });
+                } else {
+                    chrome.runtime.sendMessage({ type: 'scrollStatus', data: { status: 'finished' } });
+                }
+                return;
+            }
+
+            // Check for scroll interruption (user manually scrolled)
+            const currentScrollPosition = window.scrollY;
+            if (Math.abs(currentScrollPosition - this.lastScrollPosition) > this.autoScrollSettings.scrollSpeed + 50) {
+                // User has manually scrolled, stop auto scroll
+                this.stopAutoScroll();
+                chrome.runtime.sendMessage({ type: 'scrollStatus', data: { status: 'interrupted' } });
+                return;
+            }
+
+            // Calculate next scroll position
+            this.targetScrollPosition = currentScrollPosition + this.autoScrollSettings.scrollSpeed;
+            this.lastScrollTime = currentTime;
+            this.lastScrollPosition = currentScrollPosition;
+
+            // Perform smooth scroll to target position
+            if (this.autoScrollSettings.smoothScroll) {
+                this.smoothScrollBy(this.autoScrollSettings.scrollSpeed, 800);
+            } else {
+                window.scrollBy(0, this.autoScrollSettings.scrollSpeed);
+            }
+
+            // Notify popup that we are scrolling with remaining time info
+            const remainingTime = this.autoScrollSettings.scrollDuration > 0 
+                ? Math.max(0, this.autoScrollSettings.scrollDuration - totalElapsedTime)
+                : null;
+            
+            chrome.runtime.sendMessage({ 
+                type: 'scrollStatus', 
+                data: { 
+                    status: 'scrolling',
+                    remainingTime: remainingTime,
+                    totalElapsedTime: totalElapsedTime
+                } 
+            });
+        }
+
+        // Continue animation
+        this.scrollAnimationId = requestAnimationFrame(() => this.scrollAnimationStep());
+    }
+
+    // Smooth scroll by a certain amount
+    smoothScrollBy(distance, duration = 600) {
+        const startY = window.scrollY;
+        const targetY = startY + distance;
+        this.smoothScrollTo(targetY, duration);
+    }
+
+    // Smooth scroll to a specific position using requestAnimationFrame
+    smoothScrollTo(targetY, duration = 600) {
+        return new Promise((resolve) => {
+            const startY = window.scrollY;
+            const distance = targetY - startY;
+            const startTime = performance.now();
+
+            const animateScroll = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Apply easing function
+                const easedProgress = this.easeOutCubic(progress);
+                const currentY = startY + (distance * easedProgress);
+                
+                window.scrollTo(0, Math.round(currentY));
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateScroll);
+                } else {
+                    resolve();
+                }
+            };
+
+            requestAnimationFrame(animateScroll);
+        });
+    }
+
+    // Stop autoscrolling the page
+    stopAutoScroll() {
+        this.isScrolling = false;
+        
+        if (this.scrollAnimationId) {
+            cancelAnimationFrame(this.scrollAnimationId);
+            this.scrollAnimationId = null;
+        }
+
+        // Notify popup that scrolling has stopped
+        try {
+            chrome.runtime.sendMessage({ 
+                type: 'scrollStatus', 
+                data: { status: 'stopped' } 
+            });
+        } catch (error) {
+            // Ignore errors if popup is not open
+        }
     }
 
     // Scroll page to load more content
