@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/icons/icon128.png" alt="Bili-DynamicImage Logo" width="200px" style="border-radius:200px;">
+  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/icons/logo.png" alt="Bili-DynamicImage Logo" width="200px" style="border-radius:200px;">
 </p>
 
 <h1 align="center">Bili-DynamicImage</h1>
