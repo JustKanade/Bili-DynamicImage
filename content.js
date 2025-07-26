@@ -625,9 +625,42 @@ class BilibiliContentScript {
                 skipDownloaded: true,
                 downloadInterval: 2,
                 retryLimit: 3,
-                maxDownloads: 100
+                maxDownloads: 100,
+                // Filter settings
+                filters: {
+                    startDate: '',
+                    endDate: '',
+                    includeKeywords: '',
+                    excludeKeywords: '',
+                    caseSensitive: false,
+                    exactMatch: false,
+                    minImageCount: '',
+                    maxImageCount: '',
+                    dynamicTypes: {
+                        normal: true,
+                        repost: true,
+                        video: true,
+                        article: true
+                    }
+                }
             };
-            return { ...defaultSettings, ...result.bilibiliDownloaderSettings };
+            
+            const settings = { ...defaultSettings, ...result.bilibiliDownloaderSettings };
+            
+            // Ensure filters object exists and has all required properties
+            if (!settings.filters) {
+                settings.filters = defaultSettings.filters;
+            } else {
+                // Merge with default filters to ensure all properties exist
+                settings.filters = { ...defaultSettings.filters, ...settings.filters };
+                
+                // Ensure dynamicTypes exists
+                if (!settings.filters.dynamicTypes) {
+                    settings.filters.dynamicTypes = defaultSettings.filters.dynamicTypes;
+                }
+            }
+            
+            return settings;
         } catch (error) {
             console.error('Failed to load settings:', error);
             return {
@@ -636,7 +669,24 @@ class BilibiliContentScript {
                 skipDownloaded: true,
                 downloadInterval: 2,
                 retryLimit: 3,
-                maxDownloads: 100
+                maxDownloads: 100,
+                // Filter settings
+                filters: {
+                    startDate: '',
+                    endDate: '',
+                    includeKeywords: '',
+                    excludeKeywords: '',
+                    caseSensitive: false,
+                    exactMatch: false,
+                    minImageCount: '',
+                    maxImageCount: '',
+                    dynamicTypes: {
+                        normal: true,
+                        repost: true,
+                        video: true,
+                        article: true
+                    }
+                }
             };
         }
     }
@@ -978,6 +1028,17 @@ class BilibiliContentScript {
         if (!filters) return true;
         
         const { includeKeywords, excludeKeywords, caseSensitive = false, exactMatch = false } = filters;
+        
+        // Debug logging for keyword filtering
+        if ((includeKeywords && includeKeywords.trim()) || (excludeKeywords && excludeKeywords.trim())) {
+            console.log('Keyword filter check:', {
+                content: content.substring(0, 50) + '...',
+                includeKeywords,
+                excludeKeywords,
+                caseSensitive,
+                exactMatch
+            });
+        }
         
         // Prepare content for comparison
         let checkContent = caseSensitive ? content : content.toLowerCase();
