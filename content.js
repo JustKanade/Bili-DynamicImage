@@ -256,7 +256,6 @@ class BilibiliContentScript {
                 .bili-download-item.downloading {
                     background-color: rgba(0, 135, 189, 0.25);
                     border-left: 3px solid #0087BD;
-                    box-shadow: 0 0 8px rgba(0, 135, 189, 0.3);
                 }
                 
                 /* Prevent text wrapping for main text */
@@ -355,7 +354,6 @@ class BilibiliContentScript {
                     .bili-download-item.downloading {
                         background-color: rgba(0, 149, 210, 0.35);
                         border-left: 3px solid #0095d2;
-                        box-shadow: 0 0 8px rgba(0, 149, 210, 0.4);
                     }
                     
                     .bili-download-item .side-nav__item__main-text {
