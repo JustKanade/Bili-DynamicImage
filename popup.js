@@ -50,7 +50,8 @@ class BilibiliDownloader {
                 scrollInterval: 1000,
                 smoothScroll: true,
                 autoScrollToTop: false,
-                scrollDuration: 0
+                scrollDuration: 0,
+                contentLoadWait: 3
             }
         };
 
@@ -86,6 +87,11 @@ class BilibiliDownloader {
             }
             if (this.settings.filters.exactMatch === undefined) {
                 this.settings.filters.exactMatch = false;
+            }
+            
+            // Ensure new auto scroll settings exist
+            if (this.settings.autoScroll.contentLoadWait === undefined) {
+                this.settings.autoScroll.contentLoadWait = 3;
             }
         } catch (error) {
             console.error('Failed to load settings:', error);
@@ -177,6 +183,7 @@ class BilibiliDownloader {
         document.getElementById('smoothScroll').checked = autoScroll.smoothScroll !== false;
         document.getElementById('autoScrollToTop').checked = autoScroll.autoScrollToTop || false;
         document.getElementById('scrollDuration').value = autoScroll.scrollDuration || 0;
+        document.getElementById('contentLoadWait').value = autoScroll.contentLoadWait || 3;
     }
 
     // Bind event handlers
@@ -375,6 +382,15 @@ class BilibiliDownloader {
             if (isNaN(value) || value < 0) value = 0;
             if (value > 3600) value = 3600;
             this.settings.autoScroll.scrollDuration = value;
+            e.target.value = value;
+            this.saveSettings();
+        });
+        
+        document.getElementById('contentLoadWait').addEventListener('change', (e) => {
+            let value = parseInt(e.target.value);
+            if (isNaN(value) || value < 1) value = 1;
+            if (value > 10) value = 10;
+            this.settings.autoScroll.contentLoadWait = value;
             e.target.value = value;
             this.saveSettings();
         });

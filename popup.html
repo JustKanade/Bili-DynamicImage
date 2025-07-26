@@ -158,6 +158,14 @@
                                 <p>自动滚动的最大持续时间，0表示不限制时间，滚动到底部为止</p>
                             </div>
                         </div>
+                        
+                        <div class="setting-item">
+                            <label for="contentLoadWait">内容加载等待 (秒):</label>
+                            <input type="number" id="contentLoadWait" min="1" max="10" value="3" placeholder="3">
+                            <div class="setting-help">
+                                <p>接近底部时等待新内容加载的时间，避免过快滚动导致中断</p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Filter Section -->

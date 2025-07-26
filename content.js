@@ -929,6 +929,11 @@ class BilibiliContentScript {
         this.lastScrollPosition = window.scrollY;
         this.targetScrollPosition = window.scrollY + scrollSpeed;
         this.isScrolling = true;
+        
+        // Initialize smart bottom detection variables
+        this.lastPageHeight = null;
+        this.pageHeightStableCount = 0;
+        this.contentLoadingWaitCount = 0;
 
         // Easing function for smooth animation (easeOutCubic)
         this.easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
@@ -962,10 +967,10 @@ class BilibiliContentScript {
 
         // Check if enough time has passed for the next scroll step
         if (timeSinceLastScroll >= this.autoScrollSettings.scrollInterval) {
-            // Check if we are at the bottom of the page
-            const isAtBottom = (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 10;
+            // Smart bottom detection with loading awareness
+            const bottomResult = this.smartBottomDetection();
             
-            if (isAtBottom) {
+            if (bottomResult.isBottom) {
                 this.stopAutoScroll();
                 
                 // Scroll to top if requested
@@ -976,6 +981,16 @@ class BilibiliContentScript {
                 } else {
                     chrome.runtime.sendMessage({ type: 'scrollStatus', data: { status: 'finished' } });
                 }
+                return;
+            }
+            
+            // If near bottom but content might be loading, wait a bit longer
+            if (bottomResult.isNearBottom) {
+                // Extend the interval to wait for content loading
+                this.lastScrollTime = currentTime - (this.autoScrollSettings.scrollInterval * 0.7);
+                
+                // Continue to next animation frame
+                this.scrollAnimationId = requestAnimationFrame(() => this.scrollAnimationStep());
                 return;
             }
 
@@ -1054,9 +1069,124 @@ class BilibiliContentScript {
         });
     }
 
+    // Smart bottom detection with content loading awareness
+    smartBottomDetection() {
+        const windowHeight = window.innerHeight;
+        const scrollY = window.scrollY;
+        const documentHeight = Math.max(
+            document.body.scrollHeight,
+            document.body.offsetHeight,
+            document.documentElement.clientHeight,
+            document.documentElement.scrollHeight,
+            document.documentElement.offsetHeight
+        );
+        
+        const distanceFromBottom = documentHeight - (scrollY + windowHeight);
+        const threshold = 100; // pixels from bottom
+        const nearThreshold = 300; // pixels for "near bottom"
+        
+        // Initialize page height tracking if not exists
+        if (!this.lastPageHeight) {
+            this.lastPageHeight = documentHeight;
+            this.pageHeightStableCount = 0;
+            this.contentLoadingWaitCount = 0;
+        }
+        
+        // Check if page height has changed (content is loading)
+        const heightChanged = documentHeight > this.lastPageHeight;
+        if (heightChanged) {
+            this.lastPageHeight = documentHeight;
+            this.pageHeightStableCount = 0;
+            this.contentLoadingWaitCount = 0;
+        } else {
+            this.pageHeightStableCount++;
+        }
+        
+        // Check for Bilibili loading indicators
+        const hasLoadingIndicator = this.checkBilibiliLoadingState();
+        
+        // Near bottom detection
+        const isNearBottom = distanceFromBottom <= nearThreshold;
+        const isAtBottom = distanceFromBottom <= threshold;
+        
+        if (isAtBottom) {
+            // If we're at bottom but height is still changing or loading indicators are present
+            if (heightChanged || hasLoadingIndicator) {
+                console.log('At bottom but content is still loading, waiting...');
+                this.contentLoadingWaitCount++;
+                
+                // Wait up to configured times for new content
+                const maxWaitTimes = Math.max(1, Math.floor((this.autoScrollSettings.contentLoadWait || 3) * 1000 / this.autoScrollSettings.scrollInterval));
+                if (this.contentLoadingWaitCount < maxWaitTimes) {
+                    return { isBottom: false, isNearBottom: true };
+                }
+            }
+            
+            // If page height has been stable for several checks, we're truly at bottom
+            if (this.pageHeightStableCount >= 3) {
+                console.log('Reached actual bottom of page');
+                return { isBottom: true, isNearBottom: false };
+            }
+            
+            // Still uncertain, wait a bit more
+            return { isBottom: false, isNearBottom: true };
+        }
+        
+        if (isNearBottom) {
+            // Near bottom, give content time to load
+            return { isBottom: false, isNearBottom: true };
+        }
+        
+        // Not near bottom, continue scrolling normally
+        return { isBottom: false, isNearBottom: false };
+    }
+    
+    // Check for Bilibili specific loading indicators
+    checkBilibiliLoadingState() {
+        // Check for common loading indicators on Bilibili
+        const loadingSelectors = [
+            '.loading', 
+            '.bili-loading',
+            '.skeleton-loading',
+            '.bili-dyn-list__skeleton',
+            '[class*="loading"]',
+            '[class*="skeleton"]'
+        ];
+        
+        for (const selector of loadingSelectors) {
+            const loadingElement = document.querySelector(selector);
+            if (loadingElement && loadingElement.offsetParent !== null) {
+                console.log(`Found loading indicator: ${selector}`);
+                return true;
+            }
+        }
+        
+        // Check for network requests (simplified check)
+        // This is a heuristic - if many images are still loading, content might still be coming
+        const images = document.querySelectorAll('img[src*="bilibili"]');
+        let loadingImages = 0;
+        images.forEach(img => {
+            if (!img.complete || img.naturalHeight === 0) {
+                loadingImages++;
+            }
+        });
+        
+        if (loadingImages > 5) {
+            console.log(`Found ${loadingImages} images still loading`);
+            return true;
+        }
+        
+        return false;
+    }
+
     // Stop autoscrolling the page
     stopAutoScroll() {
         this.isScrolling = false;
+        
+        // Clean up page height tracking
+        delete this.lastPageHeight;
+        delete this.pageHeightStableCount;
+        delete this.contentLoadingWaitCount;
         
         if (this.scrollAnimationId) {
             cancelAnimationFrame(this.scrollAnimationId);
