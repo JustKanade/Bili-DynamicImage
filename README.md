@@ -21,6 +21,25 @@
 
 ## 主要功能
 
+- **单个动态下载**: 在动态卡片菜单中选择"下载图片"，可选择性下载该动态的部分或全部图片。
+
+<p align="center">
+  <img src="screenshots/single-download-menu.png" alt="动态菜单中的下载选项" width="400px">
+</p>
+
+<p align="center">
+  <strong>在动态卡片的三点菜单中选择"下载图片"</strong>
+</p>
+
+<p align="center">
+  <img src="screenshots/image-selector.png" alt="图片选择界面" width="600px">
+</p>
+
+<p align="center">
+  <strong>选择要下载的图片，支持全选/取消全选</strong>
+</p>
+
+
 - **批量下载**: 一键下载B站动态中的所有图片。
 - **自动滚动加载**: 自动向下滚动页面以加载更多动态，方便一次性下载。
 - **自定义文件命名**: 支持通过预设变量自定义保存的文件名格式。
