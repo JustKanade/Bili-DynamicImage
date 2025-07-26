@@ -199,7 +199,8 @@ class BilibiliContentScript {
     isSupportedPage() {
         const url = window.location.href;
         return url.includes('t.bilibili.com') || 
-               (url.includes('space.bilibili.com') && url.includes('dynamic'));
+               (url.includes('space.bilibili.com') && url.includes('dynamic')) ||
+               url.includes('www.bilibili.com/opus/');
     }
 
     // Add download button to sidebar navigation
@@ -617,17 +618,26 @@ class BilibiliContentScript {
         }
     }
 
-    // Extract images from dynamic card
+    // Extract images from dynamic card or detail page
     extractImagesFromCard(card) {
         const images = [];
         
         try {
-            // Look for different image containers
-            const imageElements = card.querySelectorAll('.bili-album__preview__picture img, .bili-dyn-gallery img, .bili-album img');
+            let imageElements = [];
+            
+            // Check if we're on a detail page (card is document.body)
+            if (card === document.body) {
+                // Detail page specific selectors
+                imageElements = card.querySelectorAll('.opus-module-album img, .opus-album img, .bili-album__preview__picture img, .bili-dyn-gallery img, .bili-album img, img[src*="i0.hdslb.com"]');
+            } else {
+                // Regular dynamic card selectors
+                imageElements = card.querySelectorAll('.bili-album__preview__picture img, .bili-dyn-gallery img, .bili-album img');
+            }
             
             imageElements.forEach((img, index) => {
                 const src = img.src || img.dataset.src || img.getAttribute('data-src');
-                if (src && !src.includes('loading')) {
+                // Filter out non-content images (avatars, icons, etc.)
+                if (src && !src.includes('loading') && this.isContentImage(src)) {
                     images.push({
                         index: index,
                         url: src,
@@ -641,6 +651,19 @@ class BilibiliContentScript {
         }
         
         return images;
+    }
+
+    // Check if image is a content image (not avatar, icon, etc.)
+    isContentImage(src) {
+        // Filter out avatars, icons, and other UI elements
+        if (src.includes('face') || src.includes('avatar') || src.includes('icon') || 
+            src.includes('logo') || src.includes('emoji') || src.includes('default')) {
+            return false;
+        }
+        
+        // Check if it's from bilibili's image CDN
+        return src.includes('i0.hdslb.com') || src.includes('i1.hdslb.com') || 
+               src.includes('i2.hdslb.com') || src.includes('biliimg.com');
     }
 
     // Get original image URL from thumbnail
@@ -1651,8 +1674,30 @@ class BilibiliContentScript {
         try {
             let dynamicCards = [];
             
-            if (window.location.hostname === 't.bilibili.com') {
-                dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item');
+            // Check if we're on a dynamic detail page
+            if (window.location.hostname === 'www.bilibili.com' && window.location.pathname.startsWith('/opus/')) {
+                // Handle dynamic detail page
+                const dynamicInfo = await this.extractDetailPageDynamicInfo(settings);
+                if (dynamicInfo) {
+                    dynamics.push(dynamicInfo);
+                }
+                console.log(`Detail page dynamic extraction: ${dynamicInfo ? 'found 1 dynamic' : 'no valid dynamic'}`);
+                return dynamics;
+            } else if (window.location.hostname === 't.bilibili.com') {
+                // Check if it's a detail page on t.bilibili.com (format: t.bilibili.com/[dynamic_id])
+                const pathParts = window.location.pathname.split('/').filter(part => part);
+                if (pathParts.length === 1 && /^\d+$/.test(pathParts[0])) {
+                    // This is a detail page on t.bilibili.com
+                    const dynamicInfo = await this.extractDetailPageDynamicInfo(settings);
+                    if (dynamicInfo) {
+                        dynamics.push(dynamicInfo);
+                    }
+                    console.log(`Detail page dynamic extraction: ${dynamicInfo ? 'found 1 dynamic' : 'no valid dynamic'}`);
+                    return dynamics;
+                } else {
+                    // This is a list page on t.bilibili.com
+                    dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item');
+                }
             } else if (window.location.hostname === 'space.bilibili.com') {
                 dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item');
             }
@@ -1692,6 +1737,91 @@ class BilibiliContentScript {
         } catch (error) {
             console.error('Failed to extract dynamics:', error);
             throw error;
+        }
+    }
+
+    // Extract information from dynamic detail page
+    async extractDetailPageDynamicInfo(settings) {
+        try {
+            // Extract dynamic ID from URL
+            let dynamicId = null;
+            if (window.location.hostname === 'www.bilibili.com' && window.location.pathname.startsWith('/opus/')) {
+                // Extract from opus URL: /opus/[dynamic_id]
+                const pathParts = window.location.pathname.split('/');
+                if (pathParts.length >= 3) {
+                    dynamicId = pathParts[2];
+                }
+            } else if (window.location.hostname === 't.bilibili.com') {
+                // Extract from t.bilibili.com URL: /[dynamic_id]
+                const pathParts = window.location.pathname.split('/').filter(part => part);
+                if (pathParts.length === 1 && /^\d+$/.test(pathParts[0])) {
+                    dynamicId = pathParts[0];
+                }
+            }
+
+            if (!dynamicId) {
+                console.log('Could not extract dynamic ID from URL');
+                return null;
+            }
+
+            // Check if already downloaded
+            if (settings.skipDownloaded && this.downloadedIds.has(dynamicId)) {
+                console.log(`Skipping downloaded dynamic: ${dynamicId}`);
+                return null;
+            }
+
+            // Check if contains images (detail page specific selectors)
+            const hasImages = document.querySelector('.opus-module-album') || 
+                             document.querySelector('.opus-album') ||
+                             document.querySelector('.bili-album') || 
+                             document.querySelector('.bili-dyn-gallery') ||
+                             document.querySelector('.bili-album__preview__picture') ||
+                             document.querySelector('img[src*="i0.hdslb.com"]');
+
+            if (!hasImages) {
+                console.log(`Detail page dynamic has no images, skipping: ${dynamicId}`);
+                return null;
+            }
+
+            // Get user information (detail page specific selectors)
+            const userNameEl = document.querySelector('.bili-opus-header .bili-user-profile .bili-user-profile-name') ||
+                              document.querySelector('.opus-module-author .opus-module-author__name') ||
+                              document.querySelector('.bili-dyn-item__author__name') ||
+                              document.querySelector('.bili-dyn-author__name') ||
+                              document.querySelector('.name');
+            const userName = userNameEl ? userNameEl.textContent.trim() : '';
+
+            // Get dynamic content (detail page specific selectors)
+            const contentEl = document.querySelector('.opus-module-content') ||
+                             document.querySelector('.bili-rich-text__content') ||
+                             document.querySelector('.bili-dyn-content__text') ||
+                             document.querySelector('.content');
+            const content = contentEl ? contentEl.textContent.trim() : '';
+
+            // Get publish time (detail page specific selectors)
+            const timeEl = document.querySelector('.bili-opus-header .bili-opus-header__info__time') ||
+                          document.querySelector('.opus-module-author__pub__text') ||
+                          document.querySelector('.bili-dyn-time') ||
+                          document.querySelector('[data-time]');
+            let timestamp = null;
+            if (timeEl) {
+                const timeText = timeEl.textContent.trim();
+                timestamp = this.parseTimeToTimestamp(timeText);
+            }
+
+            console.log(`Detail page extracted - ID: ${dynamicId}, User: ${userName}, Content: ${content.substring(0, 50)}...`);
+
+            return {
+                dynamicId,
+                userName,
+                content,
+                timestamp,
+                originalElement: document.body // Use document body as reference for detail page
+            };
+
+        } catch (error) {
+            console.error('Failed to extract detail page dynamic info:', error);
+            return null;
         }
     }
 

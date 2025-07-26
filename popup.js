@@ -567,7 +567,7 @@ class BilibiliDownloader {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             
-            if (tab.url.includes('t.bilibili.com') || tab.url.includes('space.bilibili.com')) {
+            if (tab.url.includes('t.bilibili.com') || tab.url.includes('space.bilibili.com') || tab.url.includes('www.bilibili.com/opus/')) {
                 this.setStatus('就绪');
                 document.getElementById('downloadBtn').disabled = false;
             } else {
@@ -804,7 +804,7 @@ class BilibiliDownloader {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             
-            if (tab.url.includes('t.bilibili.com') || tab.url.includes('space.bilibili.com')) {
+            if (tab.url.includes('t.bilibili.com') || tab.url.includes('space.bilibili.com') || tab.url.includes('www.bilibili.com/opus/')) {
                 // Check if auto scroll is currently running
                 const response = await this.sendMessageWithTimeout(tab.id, {
                     type: 'getAutoScrollStatus'

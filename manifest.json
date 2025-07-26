@@ -26,7 +26,8 @@
       "matches": [
         "https://t.bilibili.com/*",
         "https://space.bilibili.com/*/dynamic*",
-        "https://space.bilibili.com/*"
+        "https://space.bilibili.com/*",
+        "https://www.bilibili.com/opus/*"
       ],
       "js": ["content.js"],
       "run_at": "document_end"
