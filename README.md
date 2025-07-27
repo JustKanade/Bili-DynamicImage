@@ -21,6 +21,17 @@
 
 ## 主要功能
 - **批量下载**: 一键下载B站动态中的所有图片。
+
+<p align="center">
+  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/.readme/nav.png" alt="动态主页侧边栏中的批量下载选项" width="400px">
+</p>
+
+
+<p align="center">
+  <strong>动态主页侧边栏中的批量下载选项</strong>
+</p>
+
+
 - **单个动态下载**: 在动态卡片菜单中选择"下载图片"，可选择性下载该动态的部分或全部图片。
 
 <p align="center">
