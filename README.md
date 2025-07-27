@@ -20,7 +20,7 @@
 </p>
 
 ## 主要功能
-
+- **批量下载**: 一键下载B站动态中的所有图片。
 - **单个动态下载**: 在动态卡片菜单中选择"下载图片"，可选择性下载该动态的部分或全部图片。
 
 <p align="center">
@@ -40,13 +40,21 @@
 </p>
 
 
-- **批量下载**: 一键下载B站动态中的所有图片。
+
 
 
 
 <p align="center">
-  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/.readme/single1.png" alt="侧边栏中的下载选项" width="400px">
+  <img src="https://github.com/JustKanade/Bili-DynamicImage/blob/main/.readme/toolbar.png" alt="侧边栏中的下载选项" width="400px">
 </p>
+
+
+<p align="center">
+  <strong>在工具栏菜单中点击下载图标</strong>
+</p>
+
+
+
 
 - **侧边工具栏下载**: 在动态详情页面侧边栏提供快速下载按钮，显示可下载图片数量。
 - **新版动态支持**: 全面支持B站新版动态卡片格式，包括水平滚动相册等新布局。
