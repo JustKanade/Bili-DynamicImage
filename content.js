@@ -1102,6 +1102,17 @@ class BilibiliContentScript {
         }
     }
 
+    // Detect current theme from page
+    detectPageTheme() {
+        // Check for dark theme indicators in Bilibili
+        const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark' ||
+                          document.body.classList.contains('dark') ||
+                          document.querySelector('html[data-theme="dark"]') ||
+                          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        return isDarkMode ? 'dark' : 'light';
+    }
+
     // Add image selector styles
     addImageSelectorStyles() {
         if (document.querySelector('#bili-image-selector-styles')) {
@@ -1110,6 +1121,10 @@ class BilibiliContentScript {
 
         const style = document.createElement('style');
         style.id = 'bili-image-selector-styles';
+        
+        // Detect current theme
+        const currentTheme = this.detectPageTheme();
+        const isDark = currentTheme === 'dark';
         style.textContent = `
             .bili-image-selector {
                 position: fixed;
@@ -1134,7 +1149,7 @@ class BilibiliContentScript {
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background: rgba(0, 0, 0, 0.8);
+                background: ${isDark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.8)'};
             }
 
             .bili-image-selector__content {
@@ -1142,12 +1157,14 @@ class BilibiliContentScript {
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                background: white;
+                background: ${isDark ? '#1f1f23' : 'white'};
+                color: ${isDark ? '#e1e2e3' : '#212121'};
                 border-radius: 8px;
                 max-width: 90vw;
                 max-height: 90vh;
                 overflow: hidden;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                box-shadow: 0 4px 20px ${isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.3)'};
+                border: ${isDark ? '1px solid #333' : 'none'};
             }
 
             .bili-image-selector__header {
@@ -1155,21 +1172,21 @@ class BilibiliContentScript {
                 justify-content: space-between;
                 align-items: center;
                 padding: 16px 20px;
-                border-bottom: 1px solid #e1e2e3;
-                background: #f7f8fa;
+                border-bottom: 1px solid ${isDark ? '#333' : '#e1e2e3'};
+                background: ${isDark ? '#2a2a2d' : '#f7f8fa'};
             }
 
             .bili-image-selector__header h3 {
                 margin: 0;
                 font-size: 16px;
-                color: #333;
+                color: ${isDark ? '#e1e2e3' : '#333'};
             }
 
             .bili-image-selector__close {
                 background: none;
                 border: none;
                 font-size: 24px;
-                color: #999;
+                color: ${isDark ? '#aaa' : '#999'};
                 cursor: pointer;
                 padding: 0;
                 width: 30px;
@@ -1177,10 +1194,11 @@ class BilibiliContentScript {
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                transition: color 0.2s ease;
             }
 
             .bili-image-selector__close:hover {
-                color: #666;
+                color: ${isDark ? '#fff' : '#666'};
             }
 
             .bili-image-selector__controls {
@@ -1188,15 +1206,15 @@ class BilibiliContentScript {
                 align-items: center;
                 gap: 12px;
                 padding: 12px 20px;
-                border-bottom: 1px solid #e1e2e3;
-                background: #fafbfc;
+                border-bottom: 1px solid ${isDark ? '#333' : '#e1e2e3'};
+                background: ${isDark ? '#26262a' : '#fafbfc'};
             }
 
             .bili-image-selector__controls button {
                 padding: 6px 12px;
-                border: 1px solid #0087BD;
-                background: white;
-                color: #0087BD;
+                border: 1px solid ${isDark ? '#00a1d6' : '#0087BD'};
+                background: ${isDark ? '#1f1f23' : 'white'};
+                color: ${isDark ? '#00a1d6' : '#0087BD'};
                 border-radius: 4px;
                 cursor: pointer;
                 font-size: 12px;
@@ -1204,14 +1222,14 @@ class BilibiliContentScript {
             }
 
             .bili-image-selector__controls button:hover {
-                background: #0087BD;
+                background: ${isDark ? '#00a1d6' : '#0087BD'};
                 color: white;
             }
 
             .bili-image-selector__counter {
                 margin-left: auto;
                 font-size: 14px;
-                color: #666;
+                color: ${isDark ? '#aaa' : '#666'};
             }
 
             .bili-image-selector__grid {
@@ -1221,6 +1239,25 @@ class BilibiliContentScript {
                 padding: 20px;
                 max-height: 400px;
                 overflow-y: auto;
+                background: ${isDark ? '#1f1f23' : 'white'};
+            }
+
+            .bili-image-selector__grid::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            .bili-image-selector__grid::-webkit-scrollbar-track {
+                background: ${isDark ? '#2a2a2d' : '#f1f1f1'};
+                border-radius: 4px;
+            }
+
+            .bili-image-selector__grid::-webkit-scrollbar-thumb {
+                background: ${isDark ? '#555' : '#c1c1c1'};
+                border-radius: 4px;
+            }
+
+            .bili-image-selector__grid::-webkit-scrollbar-thumb:hover {
+                background: ${isDark ? '#777' : '#a8a8a8'};
             }
 
             .bili-image-selector__item {
@@ -1234,7 +1271,8 @@ class BilibiliContentScript {
             }
 
             .bili-image-selector__item:hover {
-                border-color: #0087BD;
+                border-color: ${isDark ? '#00a1d6' : '#0087BD'};
+                box-shadow: 0 2px 8px ${isDark ? 'rgba(0, 161, 214, 0.3)' : 'rgba(0, 135, 189, 0.3)'};
             }
 
             .bili-image-selector__item img {
@@ -1286,13 +1324,13 @@ class BilibiliContentScript {
                 justify-content: flex-end;
                 gap: 12px;
                 padding: 16px 20px;
-                border-top: 1px solid #e1e2e3;
-                background: #f7f8fa;
+                border-top: 1px solid ${isDark ? '#333' : '#e1e2e3'};
+                background: ${isDark ? '#2a2a2d' : '#f7f8fa'};
             }
 
             .bili-image-selector__footer button {
                 padding: 8px 16px;
-                border: 1px solid #ccc;
+                border: 1px solid ${isDark ? '#555' : '#ccc'};
                 border-radius: 4px;
                 cursor: pointer;
                 font-size: 14px;
@@ -1300,78 +1338,33 @@ class BilibiliContentScript {
             }
 
             .bili-image-selector__cancel {
-                background: white;
-                color: #666;
+                background: ${isDark ? '#1f1f23' : 'white'};
+                color: ${isDark ? '#aaa' : '#666'};
             }
 
             .bili-image-selector__cancel:hover {
-                background: #f5f5f5;
+                background: ${isDark ? '#333' : '#f5f5f5'};
+                color: ${isDark ? '#fff' : '#666'};
             }
 
             .bili-image-selector__download {
-                background: #0087BD;
+                background: ${isDark ? '#00a1d6' : '#0087BD'};
                 color: white;
-                border-color: #0087BD;
+                border-color: ${isDark ? '#00a1d6' : '#0087BD'};
             }
 
             .bili-image-selector__download:hover:not(:disabled) {
-                background: #0078a8;
+                background: ${isDark ? '#0091c2' : '#0078a8'};
             }
 
             .bili-image-selector__download:disabled {
-                background: #ccc;
-                border-color: #ccc;
+                background: ${isDark ? '#555' : '#ccc'};
+                border-color: ${isDark ? '#555' : '#ccc'};
+                color: ${isDark ? '#777' : '#999'};
                 cursor: not-allowed;
             }
 
-            /* Dark mode support */
-            @media (prefers-color-scheme: dark) {
-                .bili-image-selector__content {
-                    background: #1a1a1a;
-                    color: #e0e0e0;
-                }
 
-                .bili-image-selector__header,
-                .bili-image-selector__controls,
-                .bili-image-selector__footer {
-                    background: #2a2a2a;
-                    border-color: #3a3a3a;
-                }
-
-                .bili-image-selector__header h3 {
-                    color: #e0e0e0;
-                }
-
-                .bili-image-selector__controls button {
-                    background: #2a2a2a;
-                    color: #0095d2;
-                    border-color: #0095d2;
-                }
-
-                .bili-image-selector__controls button:hover {
-                    background: #0095d2;
-                    color: white;
-                }
-
-                .bili-image-selector__cancel {
-                    background: #2a2a2a;
-                    color: #aaa;
-                    border-color: #555;
-                }
-
-                .bili-image-selector__cancel:hover {
-                    background: #3a3a3a;
-                }
-
-                .bili-image-selector__download {
-                    background: #0095d2;
-                    border-color: #0095d2;
-                }
-
-                .bili-image-selector__download:hover:not(:disabled) {
-                    background: #00a7e9;
-                }
-            }
         `;
 
         document.head.appendChild(style);
