@@ -115,7 +115,9 @@ class BilibiliContentScript {
                         if (node.nodeType === Node.ELEMENT_NODE) {
                             return node.classList?.contains('side-nav') ||
                                    node.classList?.contains('space-dynamic__left') ||
+                                   node.classList?.contains('side-toolbar') ||
                                    node.querySelector?.('.side-nav') ||
+                                   node.querySelector?.('.side-toolbar') ||
                                    node.classList?.contains('bili-download-item');
                         }
                         return false;
@@ -180,6 +182,7 @@ class BilibiliContentScript {
     setupDownloadButton() {
         if (this.isSupportedPage()) {
             this.addDownloadButton();
+            this.addSideToolbarButton();
         } else {
             // Remove button if page no longer supports download
             this.removeDownloadButton();
@@ -228,6 +231,33 @@ class BilibiliContentScript {
         };
 
         checkSidebar();
+    }
+
+    // Add download button to side toolbar (for dynamic detail pages)
+    addSideToolbarButton() {
+        // Don't add if button already exists
+        if (this.sideToolbarButton && document.body.contains(this.sideToolbarButton)) {
+            return;
+        }
+
+        // Wait for side toolbar to load
+        const maxAttempts = 20;
+        let attempts = 0;
+
+        const checkSideToolbar = () => {
+            attempts++;
+            const sideToolbar = document.querySelector('.side-toolbar__box');
+            
+            if (sideToolbar && !sideToolbar.querySelector('.bili-download-toolbar-item')) {
+                this.injectSideToolbarButton(sideToolbar);
+            } else if (attempts < maxAttempts) {
+                // Retry with exponential backoff
+                const delay = Math.min(500 * Math.pow(1.2, attempts), 3000);
+                setTimeout(checkSideToolbar, delay);
+            }
+        };
+
+        checkSideToolbar();
     }
 
     // Inject download button into sidebar
@@ -451,6 +481,64 @@ class BilibiliContentScript {
         console.log('Download button added to sidebar');
     }
 
+    // Inject download button into side toolbar
+    injectSideToolbarButton(sideToolbar) {
+        // Double check we don't already have a button
+        if (sideToolbar.querySelector('.bili-download-toolbar-item')) {
+            return;
+        }
+
+        // Create download button with side toolbar styling
+        const downloadAction = document.createElement('div');
+        downloadAction.className = 'side-toolbar__action bili-download-toolbar-item';
+        downloadAction.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C12.4142 2 12.75 2.33579 12.75 2.75V13.4393L16.2197 9.96967C16.5126 9.67678 16.9874 9.67678 17.2803 9.96967C17.5732 10.2626 17.5732 10.7374 17.2803 11.0303L12.5303 15.7803C12.2374 16.0732 11.7626 16.0732 11.4697 15.7803L6.71967 11.0303C6.42678 10.7374 6.42678 10.2626 6.71967 9.96967C7.01256 9.67678 7.48744 9.67678 7.78033 9.96967L11.25 13.4393V2.75C11.25 2.33579 11.5858 2 12 2ZM5 16.25C5.41421 16.25 5.75 16.5858 5.75 17V19C5.75 19.1381 5.86193 19.25 6 19.25H18C18.1381 19.25 18.25 19.1381 18.25 19V17C18.25 16.5858 18.5858 16.25 19 16.25C19.4142 16.25 19.75 16.5858 19.75 17V19C19.75 19.9665 18.9665 20.75 18 20.75H6C5.0335 20.75 4.25 19.9665 4.25 19V17C4.25 16.5858 4.5858 16.25 5 16.25Z" fill="currentColor"/>
+            </svg>
+            <div class="side-toolbar__action__text bili-download-count">0</div>
+        `;
+
+        // Add styles for the toolbar button
+        if (!document.querySelector('#bili-side-toolbar-styles')) {
+            const style = document.createElement('style');
+            style.id = 'bili-side-toolbar-styles';
+            style.textContent = `
+                .bili-download-toolbar-item {
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                .bili-download-toolbar-item:hover {
+                    color: #00AEEC;
+                }
+                .bili-download-toolbar-item.downloading {
+                    color: #FB7299;
+                }
+                .bili-download-toolbar-item.downloading svg {
+                    animation: bili-download-spin 1s linear infinite;
+                }
+                @keyframes bili-download-spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Add click event handler
+        downloadAction.addEventListener('click', () => {
+            this.handleSideToolbarDownloadClick();
+        });
+
+        // Insert the download button after the last action (usually comment)
+        sideToolbar.appendChild(downloadAction);
+        this.sideToolbarButton = downloadAction;
+        
+        // Update the count display
+        this.updateSideToolbarCount();
+
+        console.log('Download button added to side toolbar');
+    }
+
     // Open settings popup
     openSettings() {
         try {
@@ -475,6 +563,63 @@ class BilibiliContentScript {
         } catch (error) {
             console.error('Error opening settings:', error);
             this.showSettingsNotification('打开设置时出错，请刷新页面后重试');
+        }
+    }
+
+    // Handle download click from side toolbar
+    async handleSideToolbarDownloadClick() {
+        try {
+            console.log('Side toolbar download clicked');
+            
+            // Debug: Check what images we can extract directly
+            const directImages = this.extractImagesFromCard(document.body);
+            console.log(`Direct image extraction found: ${directImages.length} images`);
+            
+            // For detail pages, treat as single dynamic download
+            const dynamicInfo = await this.extractDetailPageDynamicInfo({ skipDownloaded: false, skipReference: false });
+            if (!dynamicInfo) {
+                console.log('No dynamic info found, but trying direct image extraction...');
+                
+                // If detail page extraction failed but we have images, try to create minimal dynamic info
+                if (directImages.length > 0) {
+                    console.log('Creating fallback dynamic info for direct images');
+                    const fallbackDynamicInfo = {
+                        dynamicId: 'current-page',
+                        userName: 'Unknown',
+                        content: 'Current Page Images',
+                        timeText: '',
+                        hasImages: true,
+                        originalElement: document.body
+                    };
+                    this.showImageSelector(fallbackDynamicInfo, document.body);
+                    return;
+                }
+                
+                this.showNotification('该动态没有可下载的图片', 'warning');
+                return;
+            }
+
+            // Show image selector for the current dynamic
+            this.showImageSelector(dynamicInfo, document.body);
+        } catch (error) {
+            console.error('Failed to handle side toolbar download click:', error);
+            this.showNotification('下载失败: ' + error.message, 'error');
+        }
+    }
+
+    // Update side toolbar download count
+    updateSideToolbarCount() {
+        if (!this.sideToolbarButton) return;
+        
+        const countElement = this.sideToolbarButton.querySelector('.bili-download-count');
+        if (countElement) {
+            // Count images on current page
+            const images = this.extractImagesFromCard(document.body);
+            console.log(`Side toolbar count update: found ${images.length} images`);
+            if (images.length > 0) {
+                console.log('Image sources:', images.map(img => img.url));
+            }
+            countElement.textContent = images.length.toString();
         }
     }
     
@@ -567,13 +712,13 @@ class BilibiliContentScript {
         let current = menuElement;
         while (current && current !== document.body) {
             current = current.parentElement;
-            if (current && current.classList.contains('bili-dyn-item')) {
+            if (current && (current.classList.contains('bili-dyn-item') || current.classList.contains('bili-opus-view'))) {
                 return current;
             }
         }
         
         // If not found in parent hierarchy, try to find by proximity
-        const allCards = document.querySelectorAll('.bili-dyn-item');
+        const allCards = document.querySelectorAll('.bili-dyn-item, .bili-opus-view');
         for (const card of allCards) {
             const rect = card.getBoundingClientRect();
             const menuRect = menuElement.getBoundingClientRect();
@@ -624,33 +769,191 @@ class BilibiliContentScript {
         
         try {
             let imageElements = [];
+            let pictureElements = [];
             
             // Check if we're on a detail page (card is document.body)
             if (card === document.body) {
                 // Detail page specific selectors
-                imageElements = card.querySelectorAll('.opus-module-album img, .opus-album img, .bili-album__preview__picture img, .bili-dyn-gallery img, .bili-album img, img[src*="i0.hdslb.com"]');
+                imageElements = card.querySelectorAll('.opus-module-album img, .opus-album img, .bili-album__preview__picture img, .bili-dyn-gallery img, .bili-album img, .horizontal-scroll-album__pic__img img, .horizontal-scroll-album__indicator__thumbnail img, img[src*="i0.hdslb.com"]');
+                pictureElements = card.querySelectorAll('.opus-module-album picture, .opus-album picture, .bili-album picture, .bili-dyn-gallery picture');
             } else {
-                // Regular dynamic card selectors
-                imageElements = card.querySelectorAll('.bili-album__preview__picture img, .bili-dyn-gallery img, .bili-album img');
+                // Regular dynamic card selectors (support both old and new dynamic formats)
+                imageElements = card.querySelectorAll('.bili-album__preview__picture img, .bili-dyn-gallery img, .bili-album img, .opus-module-content .bili-album img, .horizontal-scroll-album__pic__img img, .horizontal-scroll-album__indicator__thumbnail img');
+                pictureElements = card.querySelectorAll('.bili-album picture, .bili-dyn-gallery picture, .opus-module-content .bili-album picture');
             }
             
+            // Collect all potential images first
+            const allImages = [];
+            
+            // Process picture elements first (higher quality)
+            pictureElements.forEach((picture, index) => {
+                const imageData = this.extractImageFromPicture(picture);
+                if (imageData && this.isContentImage(imageData.url)) {
+                    allImages.push({
+                        url: imageData.url,
+                        originalUrl: this.getOriginalImageUrl(imageData.url),
+                        element: picture,
+                        format: imageData.format,
+                        priority: 1 // Highest priority for picture elements
+                    });
+                }
+            });
+            
+            // Process remaining img elements that are not inside picture tags
             imageElements.forEach((img, index) => {
+                // Skip if this img is inside a picture element we already processed
+                if (img.closest('picture')) {
+                    return;
+                }
+                
                 const src = img.src || img.dataset.src || img.getAttribute('data-src');
                 // Filter out non-content images (avatars, icons, etc.)
                 if (src && !src.includes('loading') && this.isContentImage(src)) {
-                    images.push({
-                        index: index,
+                    // Determine priority based on element class and image size
+                    let priority = 2; // Default priority for img elements
+                    
+                    // Lower priority for thumbnail images
+                    if (img.closest('.horizontal-scroll-album__indicator__thumbnail')) {
+                        priority = 3;
+                    }
+                    
+                    allImages.push({
                         url: src,
                         originalUrl: this.getOriginalImageUrl(src),
-                        element: img
+                        element: img,
+                        format: 'img',
+                        priority: priority
                     });
                 }
+            });
+            
+            // Process background images from horizontal scroll album
+            const backgroundElements = card.querySelectorAll('.horizontal-scroll-album__pic__blurbg__inner');
+            backgroundElements.forEach((bgElement, index) => {
+                const imageData = this.extractImageFromBackground(bgElement);
+                if (imageData && this.isContentImage(imageData.url)) {
+                    allImages.push({
+                        url: imageData.url,
+                        originalUrl: this.getOriginalImageUrl(imageData.url),
+                        element: bgElement,
+                        format: imageData.format,
+                        priority: 4 // Lower priority for background images
+                    });
+                }
+            });
+            
+            // Remove duplicates based on originalUrl, keeping the highest priority version
+            const uniqueImages = new Map();
+            allImages.forEach(imageData => {
+                const originalUrl = imageData.originalUrl;
+                if (!uniqueImages.has(originalUrl) || uniqueImages.get(originalUrl).priority > imageData.priority) {
+                    uniqueImages.set(originalUrl, imageData);
+                }
+            });
+            
+            // Convert to final images array
+            Array.from(uniqueImages.values()).forEach((imageData, index) => {
+                images.push({
+                    index: index,
+                    url: imageData.url,
+                    originalUrl: imageData.originalUrl,
+                    element: imageData.element,
+                    format: imageData.format
+                });
             });
         } catch (error) {
             console.error('Failed to extract images from card:', error);
         }
         
         return images;
+    }
+
+    // Extract image URL from CSS background-image style
+    extractImageFromBackground(element) {
+        try {
+            const style = window.getComputedStyle(element);
+            const backgroundImage = style.backgroundImage;
+            
+            if (backgroundImage && backgroundImage !== 'none') {
+                // Extract URL from url("...") format
+                const urlMatch = backgroundImage.match(/url\(["']?([^"']+)["']?\)/);
+                if (urlMatch && urlMatch[1]) {
+                    let url = urlMatch[1];
+                    // Add protocol if missing
+                    if (url.startsWith('//')) {
+                        url = 'https:' + url;
+                    }
+                    return {
+                        url: url,
+                        format: 'background'
+                    };
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Failed to extract image from background:', error);
+            return null;
+        }
+    }
+
+    // Extract image from picture element, prioritizing higher quality formats
+    extractImageFromPicture(picture) {
+        try {
+            const sources = picture.querySelectorAll('source');
+            const img = picture.querySelector('img');
+            
+            // Priority order: AVIF > WebP > others
+            const formatPriority = ['avif', 'webp'];
+            
+            for (const format of formatPriority) {
+                for (const source of sources) {
+                    if (source.type && source.type.includes(format)) {
+                        const srcset = source.getAttribute('srcset');
+                        if (srcset) {
+                            // Extract the first URL from srcset (usually the highest quality)
+                            const url = srcset.split(',')[0].split(' ')[0];
+                            if (url) {
+                                return {
+                                    url: url.startsWith('//') ? 'https:' + url : url,
+                                    format: format
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fallback to other source elements
+            for (const source of sources) {
+                const srcset = source.getAttribute('srcset');
+                if (srcset) {
+                    const url = srcset.split(',')[0].split(' ')[0];
+                    if (url) {
+                        return {
+                            url: url.startsWith('//') ? 'https:' + url : url,
+                            format: 'unknown'
+                        };
+                    }
+                }
+            }
+            
+            // Final fallback to img element
+            if (img) {
+                const src = img.src || img.dataset.src || img.getAttribute('data-src');
+                if (src) {
+                    return {
+                        url: src,
+                        format: 'img'
+                    };
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Failed to extract image from picture:', error);
+            return null;
+        }
     }
 
     // Check if image is a content image (not avatar, icon, etc.)
@@ -661,9 +964,10 @@ class BilibiliContentScript {
             return false;
         }
         
-        // Check if it's from bilibili's image CDN
-        return src.includes('i0.hdslb.com') || src.includes('i1.hdslb.com') || 
-               src.includes('i2.hdslb.com') || src.includes('biliimg.com');
+        // Check if it's from bilibili's image CDN (including new_dyn path)
+        return (src.includes('i0.hdslb.com') || src.includes('i1.hdslb.com') || 
+                src.includes('i2.hdslb.com') || src.includes('biliimg.com')) &&
+               (src.includes('bfs/album') || src.includes('bfs/new_dyn'));
     }
 
     // Get original image URL from thumbnail
@@ -1696,10 +2000,10 @@ class BilibiliContentScript {
                     return dynamics;
                 } else {
                     // This is a list page on t.bilibili.com
-                    dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item');
+                    dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item, .bili-opus-view');
                 }
             } else if (window.location.hostname === 'space.bilibili.com') {
-                dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item');
+                dynamicCards = document.querySelectorAll('.bili-dyn-list .bili-dyn-item, .bili-opus-view');
             }
 
             console.log(`Found ${dynamicCards.length} dynamic cards`);
@@ -1771,15 +2075,41 @@ class BilibiliContentScript {
             }
 
             // Check if contains images (detail page specific selectors)
-            const hasImages = document.querySelector('.opus-module-album') || 
-                             document.querySelector('.opus-album') ||
-                             document.querySelector('.bili-album') || 
-                             document.querySelector('.bili-dyn-gallery') ||
-                             document.querySelector('.bili-album__preview__picture') ||
-                             document.querySelector('img[src*="i0.hdslb.com"]');
+            const selectors = [
+                '.opus-module-album',
+                '.opus-album', 
+                '.bili-album',
+                '.bili-dyn-gallery',
+                '.bili-album__preview__picture',
+                '.opus-module-top .horizontal-scroll-album',
+                '.horizontal-scroll-album',
+                'img[src*="i0.hdslb.com"]',
+                'img[src*="i1.hdslb.com"]',
+                'img[src*="bfs/new_dyn"]',
+                'img[src*="bfs/album"]'
+            ];
+            
+            let hasImages = false;
+            let foundSelector = '';
+            
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    hasImages = true;
+                    foundSelector = selector;
+                    console.log(`Found images using selector: ${selector}`);
+                    break;
+                }
+            }
 
             if (!hasImages) {
                 console.log(`Detail page dynamic has no images, skipping: ${dynamicId}`);
+                console.log('Checked selectors:', selectors);
+                // Additional debug: check what elements are actually present
+                console.log('Available elements:');
+                console.log('- .opus-module-top:', !!document.querySelector('.opus-module-top'));
+                console.log('- .horizontal-scroll-album:', !!document.querySelector('.horizontal-scroll-album'));
+                console.log('- imgs with hdslb:', document.querySelectorAll('img[src*="hdslb.com"]').length);
                 return null;
             }
 
@@ -1828,12 +2158,23 @@ class BilibiliContentScript {
     // Extract information from single dynamic card
     async extractDynamicInfo(card, settings) {
         try {
-            const opusCard = card.querySelector('[dyn-id]');
-            if (!opusCard) {
-                return null;
+            // Try to find dynamic ID from different sources
+            let dynamicId = null;
+            let opusCard = card.querySelector('[dyn-id]');
+            
+            if (opusCard) {
+                dynamicId = opusCard.getAttribute('dyn-id');
+            } else {
+                // For new opus-view format, try to extract from URL or other attributes
+                const currentUrl = window.location.href;
+                if (currentUrl.includes('/opus/')) {
+                    const pathParts = currentUrl.split('/opus/');
+                    if (pathParts.length > 1) {
+                        dynamicId = pathParts[1].split('?')[0].split('#')[0];
+                    }
+                }
             }
 
-            const dynamicId = opusCard.getAttribute('dyn-id');
             if (!dynamicId) {
                 return null;
             }
@@ -1850,28 +2191,34 @@ class BilibiliContentScript {
                 return null;
             }
 
-            // Check if contains images
+            // Check if contains images (support both old and new dynamic formats)
             const hasImages = card.querySelector('.bili-album') || 
                              card.querySelector('.bili-dyn-gallery') ||
-                             card.querySelector('.bili-album__preview__picture');
+                             card.querySelector('.bili-album__preview__picture') ||
+                             card.querySelector('.opus-module-content .bili-album') ||
+                             card.querySelector('.bili-opus-view .bili-album') ||
+                             card.querySelector('.opus-module-top .horizontal-scroll-album');
 
             if (!hasImages) {
                 console.log(`Dynamic has no images, skipping: ${dynamicId}`);
                 return null;
             }
 
-            // Get user information
+            // Get user information (support both old and new dynamic formats)
             const userNameEl = card.querySelector('.bili-dyn-item__author__name') ||
-                              card.querySelector('.bili-dyn-author__name');
+                              card.querySelector('.bili-dyn-author__name') ||
+                              card.querySelector('.opus-module-author__name');
             const userName = userNameEl ? userNameEl.textContent.trim() : '';
 
-            // Get dynamic content
+            // Get dynamic content (support both old and new dynamic formats)
             const contentEl = card.querySelector('.bili-rich-text__content') ||
-                             card.querySelector('.bili-dyn-content__text');
+                             card.querySelector('.bili-dyn-content__text') ||
+                             card.querySelector('.opus-module-content p');
             const content = contentEl ? contentEl.textContent.trim() : '';
 
-            // Get publish time
-            const timeEl = card.querySelector('.bili-dyn-time');
+            // Get publish time (support both old and new dynamic formats)
+            const timeEl = card.querySelector('.bili-dyn-time') ||
+                          card.querySelector('.opus-module-author__pub__text');
             const timeText = timeEl ? timeEl.textContent.trim() : '';
 
             // Apply keyword filters
