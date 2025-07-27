@@ -28,7 +28,7 @@
 
 
 <p align="center">
-  <strong>动态主页侧边栏中的批量下载选项</strong>
+  <strong>动态主页侧边栏中的批量下载选项,将下载个人主页所有动态图片</strong>
 </p>
 
 
