@@ -491,6 +491,24 @@ input:checked + .slider:before {
     align-items: center;
 }
 
+.status-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.version-text {
+    color: var(--text-color);
+    font-size: 12px;
+    font-family: monospace;
+    font-weight: 500;
+    opacity: 0.9;
+    background: var(--bg-secondary);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+}
+
 .github-link {
     color: var(--primary-color);
     text-decoration: none;

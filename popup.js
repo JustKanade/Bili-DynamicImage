@@ -16,6 +16,7 @@ class BilibiliDownloader {
         await this.checkAutoScrollStatus();
         await this.checkDownloadStatus();
         this.setupMessageListener();
+        this.displayVersion();
     }
 
     // Load user settings
@@ -954,6 +955,20 @@ class BilibiliDownloader {
                 autoScrollSettings.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         }, 100);
+    }
+
+    // Display version number from manifest.json
+    displayVersion() {
+        try {
+            const manifest = chrome.runtime.getManifest();
+            const version = manifest.version;
+            const versionElement = document.getElementById('versionText');
+            if (versionElement && version) {
+                versionElement.textContent = `v${version}`;
+            }
+        } catch (error) {
+            console.error('Failed to get version from manifest:', error);
+        }
     }
 }
 
