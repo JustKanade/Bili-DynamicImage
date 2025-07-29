@@ -453,7 +453,7 @@ class BilibiliDownloadManager {
     // Send progress update to popup and content script
     sendProgressUpdate(currentItem, status) {
         const progressData = {
-            type: 'downloadProgress',
+            type: 'progressUpdate',
             data: {
                 current: this.downloadStats.current,
                 total: this.downloadStats.total,

@@ -1798,7 +1798,7 @@ class BilibiliContentScript {
                     await this.saveDownloadedId(message.dynamicId);
                     sendResponse({ success: true });
                     break;
-                case 'downloadProgress':
+                case 'progressUpdate':
                     // Update sidebar button status
                     if (message.data && message.data.current && message.data.total) {
                         this.updateDownloadStatus(
