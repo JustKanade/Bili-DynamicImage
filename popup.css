@@ -521,10 +521,55 @@ input:checked + .slider:before {
     text-decoration: underline;
 }
 
-
-.downloading {
+.check-update-btn {
+    background: none;
+    border: none;
+    border-radius: 3px;
+    padding: 4px 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     opacity: 0.8;
-} 
+    font-size: 12px;
+}
+
+.check-update-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--primary-color);
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.check-update-btn:active {
+    transform: scale(0.95);
+}
+
+.check-update-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.check-update-btn.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.check-update-btn.loading svg {
+    animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
 
 /* Filter Styles */
 .filter-header {

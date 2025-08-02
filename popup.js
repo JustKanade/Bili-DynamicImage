@@ -234,6 +234,11 @@ class BilibiliDownloader {
             chrome.tabs.create({ url: 'https://github.com/JustKanade/Bili-DynamicImage' });
         });
 
+        // Check update button handler
+        document.getElementById('checkUpdateBtn').addEventListener('click', () => {
+            this.checkForUpdates();
+        });
+
         // Settings change handlers
         document.getElementById('themeSelector').addEventListener('change', (e) => {
             this.settings.theme = e.target.value;
@@ -969,6 +974,107 @@ class BilibiliDownloader {
         } catch (error) {
             console.error('Failed to get version from manifest:', error);
         }
+    }
+
+    // Check for updates from GitHub Releases
+    async checkForUpdates() {
+        const updateBtn = document.getElementById('checkUpdateBtn');
+        
+        // Prevent multiple simultaneous checks
+        if (updateBtn.classList.contains('loading')) {
+            return;
+        }
+
+        try {
+            // Show loading state
+            updateBtn.classList.add('loading');
+            updateBtn.disabled = true;
+            this.setStatus('正在检查更新...');
+
+            // Get current version from manifest
+            const manifest = chrome.runtime.getManifest();
+            const currentVersion = manifest.version;
+
+            // Fetch latest release from GitHub API
+            const response = await fetch('https://api.github.com/repos/JustKanade/Bili-DynamicImage/releases/latest');
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const releaseData = await response.json();
+            const latestVersion = releaseData.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
+            
+            // Compare versions
+            const comparison = this.compareVersions(currentVersion, latestVersion);
+            
+            if (comparison < 0) {
+                // Current version is older
+                this.setStatus(`发现新版本 v${latestVersion}！`);
+                
+                // Show update prompt
+                const shouldUpdate = confirm(
+                    `发现新版本！\n\n当前版本: v${currentVersion}\n最新版本: v${latestVersion}\n\n是否前往GitHub下载新版本？`
+                );
+                
+                if (shouldUpdate) {
+                    chrome.tabs.create({ url: releaseData.html_url });
+                }
+            } else if (comparison === 0) {
+                // Already latest version
+                this.setStatus('已是最新版本！');
+                setTimeout(() => {
+                    this.setStatus('就绪');
+                }, 2000);
+            } else {
+                // Current version is newer (development version)
+                this.setStatus(`当前为开发版本 v${currentVersion}`);
+                setTimeout(() => {
+                    this.setStatus('就绪');
+                }, 2000);
+            }
+
+        } catch (error) {
+            console.error('Failed to check for updates:', error);
+            
+            // User-friendly error message
+            let errorMessage = '检查更新失败';
+            if (error.message.includes('Failed to fetch')) {
+                errorMessage = '网络连接失败，请检查网络连接';
+            } else if (error.message.includes('HTTP')) {
+                errorMessage = 'GitHub服务暂不可用，请稍后重试';
+            }
+            
+            this.setStatus(errorMessage);
+            setTimeout(() => {
+                this.setStatus('就绪');
+            }, 3000);
+        } finally {
+            // Remove loading state
+            updateBtn.classList.remove('loading');
+            updateBtn.disabled = false;
+        }
+    }
+
+    // Compare two version strings (semantic versioning)
+    compareVersions(version1, version2) {
+        const v1parts = version1.split('.').map(Number);
+        const v2parts = version2.split('.').map(Number);
+        
+        // Ensure both arrays have the same length
+        const maxLength = Math.max(v1parts.length, v2parts.length);
+        while (v1parts.length < maxLength) v1parts.push(0);
+        while (v2parts.length < maxLength) v2parts.push(0);
+        
+        for (let i = 0; i < maxLength; i++) {
+            if (v1parts[i] < v2parts[i]) {
+                return -1; // version1 is older
+            } else if (v1parts[i] > v2parts[i]) {
+                return 1;  // version1 is newer
+            }
+        }
+        
+        return 0; // versions are equal
     }
 }
 

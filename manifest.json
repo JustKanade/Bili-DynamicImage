@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bili-DynamicImage",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "下载B站动态页面图片，支持批量下载",
   "permissions": [
     "storage",
@@ -16,7 +16,8 @@
     "https://api.bilibili.com/*",
     "https://api.vc.bilibili.com/*",
     "https://*.hdslb.com/*",
-    "https://*.biliimg.com/*"
+    "https://*.biliimg.com/*",
+    "https://api.github.com/*"
   ],
   "background": {
     "service_worker": "background.js"
